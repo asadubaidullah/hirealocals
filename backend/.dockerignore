@@ -1,0 +1,17 @@
+.venv
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+.env
+.env.*
+hirealocals.db
+*.db-journal
+backups
+uploads
+private_uploads
+*.log
+.DS_Store
+Thumbs.db
+.git
+.gitignore

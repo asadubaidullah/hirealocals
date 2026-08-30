@@ -1,0 +1,1 @@
+﻿import NotificationCenter from "@/components/NotificationCenter";import AdminShell from "@/components/AdminShell";export default function Page(){return <AdminShell eyebrow="Admin updates" title="Notifications"><NotificationCenter embedded/></AdminShell>}

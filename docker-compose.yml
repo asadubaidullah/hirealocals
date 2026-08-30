@@ -1,0 +1,92 @@
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hirealocals}
+      POSTGRES_USER: ${POSTGRES_USER:-hirealocals}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hirealocals-dev}
+    volumes:
+      - hirealocals_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hirealocals} -d ${POSTGRES_DB:-hirealocals}"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      STRICT_PRODUCTION_CHECKS: ${STRICT_PRODUCTION_CHECKS:-false}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+      API_DOCS_ENABLED: ${API_DOCS_ENABLED:-true}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-8}
+      TRUSTED_HOSTS: ${TRUSTED_HOSTS:-localhost,127.0.0.1,api,hirealocals.com,www.hirealocals.com}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://hirealocals:hirealocals-dev@db:5432/hirealocals}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      ACCESS_TOKEN_MINUTES: ${ACCESS_TOKEN_MINUTES:-720}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      PAYMENT_MODE: ${PAYMENT_MODE:-manual}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_CURRENCY: ${STRIPE_CURRENCY:-usd}
+      STRIPE_CONNECT_RETURN_URL: ${STRIPE_CONNECT_RETURN_URL:-}
+      STRIPE_CONNECT_REFRESH_URL: ${STRIPE_CONNECT_REFRESH_URL:-}
+      STRIPE_CHECKOUT_SUCCESS_URL: ${STRIPE_CHECKOUT_SUCCESS_URL:-}
+      STRIPE_CHECKOUT_CANCEL_URL: ${STRIPE_CHECKOUT_CANCEL_URL:-}
+      STRIPE_ON_BEHALF_OF: ${STRIPE_ON_BEHALF_OF:-false}
+      TERMS_VERSION: ${TERMS_VERSION:-draft}
+      PRIVACY_VERSION: ${PRIVACY_VERSION:-draft}
+      BOOKING_POLICY_VERSION: ${BOOKING_POLICY_VERSION:-draft}
+      RELEASE_VERSION: ${RELEASE_VERSION:-3.3.0}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-support@hirealocals.com}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-HireALocals}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+    volumes:
+      - hirealocals_public_uploads:/app/uploads
+      - hirealocals_private_uploads:/app/private_uploads
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=3).read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://hirealocals.com}
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://hirealocals.com}
+      API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:8000}
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  hirealocals_pg:
+  hirealocals_public_uploads:
+  hirealocals_private_uploads:

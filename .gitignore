@@ -1,0 +1,102 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/app/__pycache__/
+backend/scripts/__pycache__/
+*.py[cod]
+
+# Local database / backups
+backend/*.db
+backend/hirealocals.db
+backend/*.db-journal
+backend/backups/
+
+# User-generated files (persist outside source control)
+backend/uploads/
+backend/private_uploads/
+!backend/uploads/.gitkeep
+!backend/private_uploads/.gitkeep
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+frontend/*.tsbuildinfo
+**/*.tsbuildinfo
+
+# Backups and temporary files
+*.bak
+**/*.bak
+backend/tmp/
+backend/PATCH-SAFEPAY.py
+backend/ passenger_wsgi.py
+
+# Logs / editor / OS
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+
+# Historical backups / recovery bundles
+/backups/
+/recovery/
+/ADMIN-V2-BACKUP-*/
+/PHASE-A1-BACKUP-*/
+/PHASE-A2A-BACKUP-*/
+/PHASE-A2B-BACKUP-*/
+/phase1b-backup-*/
+/POLISH-PASS-*/
+/PUBLIC-DESIGN-PASS1-*/
+/structure-repair-*/
+
+
+# Historical source bundles / exported archives
+*.zip
+*.rar
+frontend/*.zip
+frontend/**/*.zip
+
+# Historical inspection / recovery text dumps
+*-inspection.txt
+**/*-inspection.txt
+/dashboard-*-inspection.txt
+/help-chat-*-state.txt
+/help-chat-*-inspection.txt
+/homepage-*-inspection.txt
+/loading-ux-inspection.txt
+/LOCAL-UI-FINAL-AUDIT.txt
+/MESSAGES-*.txt
+/PHASE-B1-CURRENCY-CONTRACT.txt
+/release-*.txt
+/SAFEPAY-*-CONTRACT.txt
+/safepay-*.txt
+/stripe-removal-source-inspection.txt
+/structure.txt
+/STEP3-DIDIT-KYC-INTEGRATION-AUDIT.txt
+/STEP3-TRAVELER-FLOW-AUDIT.txt
+/BASE44-PHASE-A-CONTRACT.txt
+/HireALocals-PHASE1B-SOURCE-BUNDLE.txt
+
+# Historical copied source trees
+/frontend-new-deploy/
+/frontend_bad_v376_backup/
+/SAFEPAY-LIVE-PATCH/
+/SAFEPAY-SERVER-SAFE-PATCH/
+
+
+
+# Historical recovery utilities
+/hirealocals_release_recovery*.py
+
+# Nested historical backups
+/frontend/backups/
+/frontend/_encoding_backup_*/
+/backend/_backup_before_*/

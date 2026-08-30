@@ -1,0 +1,5 @@
+"use client";
+import { useEffect,useState } from "react";
+import { authedFetch } from "@/lib/api";
+type State={email:string;verified:boolean;require_email_verification:boolean};
+export default function EmailVerificationCard(){const [s,setS]=useState<State|null>(null);const [msg,setMsg]=useState('');useEffect(()=>{(async()=>{const r=await authedFetch('/api/auth/email-status');if(r.ok)setS(await r.json())})()},[]);async function resend(){setMsg('Queuing verification email…');const r=await authedFetch('/api/auth/resend-verification',{method:'POST'});const d=await r.json().catch(()=>({}));setMsg(d.message||d.detail||'Done')};if(!s)return null;return <div className={`email-verify-card ${s.verified?'verified':'pending'}`}><div><strong>{s.verified?'✓ Email verified':'Verify your email'}</strong><span>{s.email}</span>{!s.verified&&s.require_email_verification&&<small>Verification is required before creating bookings.</small>}</div>{!s.verified&&<button className="mini-btn" onClick={resend}>Send verification email</button>}{msg&&<small className="full-note">{msg}</small>}</div>}
