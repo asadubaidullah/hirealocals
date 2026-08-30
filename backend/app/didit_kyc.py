@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 from typing import Annotated
@@ -12,7 +12,7 @@ from sqlmodel import Session, select
 
 from .config import settings
 from .database import get_session
-from .models import LocalProfile, User
+from .models import LocalProfile, User, AuditLog
 from .security import current_user
 
 
@@ -296,6 +296,14 @@ def didit_verification_status(
     if status == "approved" and not profile.verified:
         profile.verified = True
         session.add(profile)
+        audit = AuditLog(
+            actor_user_id=user.id,
+            action="local.didit_verification_approved",
+            entity_type="local_profile",
+            entity_id=str(profile.id),
+            summary=f"Didit automated identity verification approved (Session: {clean_session_id})",
+        )
+        session.add(audit)
         session.commit()
         session.refresh(profile)
 

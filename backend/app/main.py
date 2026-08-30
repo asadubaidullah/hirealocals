@@ -1931,6 +1931,7 @@ def update_local_profile(
     payload: LocalProfileUpdate,
     user: Annotated[User, Depends(current_user)],
     session: Annotated[Session, Depends(get_session)],
+    request: Request,
 ):
     profile = require_local_profile(user, session)
     data = payload.model_dump(exclude_unset=True)
@@ -1941,11 +1942,30 @@ def update_local_profile(
             "Profile photo URL cannot be set manually. Upload a profile photo instead.",
         )
 
+    old_country = (profile.country_code or "").upper()
+    country_changed = False
+
     if "country_code" in data:
-        data["country_code"] = data["country_code"].upper()
+        new_country = (data["country_code"] or "").strip().upper()
+        data["country_code"] = new_country
+        if profile.verified and new_country and new_country != old_country:
+            country_changed = True
+
     for key, value in data.items():
         setattr(profile, key, value)
     session.add(profile)
+
+    if country_changed:
+        audit_event(
+            session=session,
+            actor_user_id=user.id,
+            action="local.profile_country_changed",
+            entity_type="local_profile",
+            entity_id=profile.id,
+            summary=f"Verified Local changed country from {old_country} to {profile.country_code}",
+            request=request,
+        )
+
     session.commit()
     session.refresh(profile)
     return profile
