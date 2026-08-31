@@ -345,3 +345,154 @@ class DemandSummaryResponse(BaseModel):
     zero_result_rate: float
     top_searched_cities: list[dict]
     top_searched_categories: list[dict]
+
+
+class RevenueKPIOverview(BaseModel):
+    period: str
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    gbv: float
+    total_local_payable: float
+    total_platform_fee: float
+    total_discount_spent: float
+    total_referral_cost: float
+    net_platform_revenue: float
+    effective_take_rate: float
+    paid_bookings_count: int
+    total_refund_volume: float
+    refund_count: int
+    payout_held: float
+    payout_unpaid: float
+    payout_paid: float
+    # Period-over-period comparison deltas
+    gbv_delta_pct: float = 0.0
+    net_revenue_delta_pct: float = 0.0
+    paid_bookings_delta_pct: float = 0.0
+    currency: str = "USD"
+
+
+class RevenueTrendPoint(BaseModel):
+    date: str
+    label: str
+    gbv: float
+    net_revenue: float
+    platform_fee: float
+    discounts: float
+    refunds: float
+    local_payable: float
+    bookings_count: int
+
+
+class CityRevenueItem(BaseModel):
+    city_name: str
+    country_code: str
+    paid_bookings_count: int
+    gbv: float
+    local_payable: float
+    platform_revenue: float
+    effective_take_rate: float
+
+
+class CategoryRevenueItem(BaseModel):
+    category_name: str
+    paid_bookings_count: int
+    gbv: float
+    local_payable: float
+    platform_revenue: float
+
+
+class LocalRevenueItem(BaseModel):
+    local_id: int
+    local_name: str
+    city_name: str
+    paid_bookings_count: int
+    gross_earnings: float
+    platform_revenue_generated: float
+
+
+class PromoRevenueItem(BaseModel):
+    code: str
+    discount_type: str
+    redemptions_count: int
+    total_discount_burn: float
+    associated_gbv: float
+    net_platform_revenue: float
+
+
+class ReferralRevenueItem(BaseModel):
+    code: str
+    referrer_name: str
+    total_referred_users: int
+    qualified_bookings_count: int
+    total_credits_earned: float
+    generated_booking_value: float
+
+
+class PaymentLifecycleStats(BaseModel):
+    total_payment_attempts: int
+    paid_count: int
+    processing_count: int
+    failed_count: int
+    refunded_count: int
+    success_rate_pct: float
+    failure_rate_pct: float
+    refund_rate_pct: float
+
+
+class ReconciliationRow(BaseModel):
+    booking_id: int
+    booking_status: str
+    traveler_name: str
+    local_name: str
+    booking_total: float
+    payment_status: str
+    safepay_tracker: str
+    charged_amount: float
+    commission_gross: float
+    local_payable: float
+    platform_fee: float
+    payout_status: str
+    reconciliation_status: str  # "matched", "warning", "mismatch"
+    discrepancy_note: str
+
+
+class PayoutAgingBucket(BaseModel):
+    bucket_label: str  # "0-7d", "8-14d", "15-30d", "30d+"
+    amount: float
+    count: int
+    local_count: int
+
+
+class PayoutAgingBreakdown(BaseModel):
+    total_unpaid_liability: float
+    unpaid_count: int
+    total_scheduled_liability: float
+    scheduled_count: int
+    total_held_liability: float
+    held_count: int
+    buckets: list[PayoutAgingBucket]
+
+
+class BatchPayoutInput(BaseModel):
+    ledger_ids: list[int]
+    target_status: str = Field(pattern="^(scheduled|paid)$")
+    reference_note: str = Field(default="", max_length=500)
+
+
+class BatchPayoutResult(BaseModel):
+    updated_count: int
+    target_status: str
+    total_amount: float
+    updated_ids: list[int]
+
+
+class RevenueAnalyticsResponse(BaseModel):
+    kpis: RevenueKPIOverview
+    trends: list[RevenueTrendPoint]
+    by_city: list[CityRevenueItem]
+    by_category: list[CategoryRevenueItem]
+    by_local: list[LocalRevenueItem]
+    by_promo: list[PromoRevenueItem]
+    by_referral: list[ReferralRevenueItem]
+    payment_stats: PaymentLifecycleStats
+    payout_aging: PayoutAgingBreakdown

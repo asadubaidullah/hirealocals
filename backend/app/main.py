@@ -8,8 +8,10 @@ import uuid
 import hashlib
 import smtplib
 from email.message import EmailMessage
+import io
+import csv
 
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Request
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -102,6 +104,20 @@ from .schemas import (
     PromoUpdateInput,
     ReferralClaimInput,
     DemandSummaryResponse,
+    RevenueKPIOverview,
+    RevenueTrendPoint,
+    CityRevenueItem,
+    CategoryRevenueItem,
+    LocalRevenueItem,
+    PromoRevenueItem,
+    ReferralRevenueItem,
+    PaymentLifecycleStats,
+    ReconciliationRow,
+    PayoutAgingBucket,
+    PayoutAgingBreakdown,
+    BatchPayoutInput,
+    BatchPayoutResult,
+    RevenueAnalyticsResponse,
 )
 from .security import hash_password, verify_password, create_access_token, current_user, admin_user
 from .didit_kyc import router as didit_kyc_router
@@ -3804,6 +3820,791 @@ def admin_revenue_summary(
         },
         "currency": settings.payment_currency.upper(),
     }
+
+
+def parse_date_window(
+    period: str = "all_time",
+    from_date: str | None = None,
+    to_date: str | None = None,
+) -> tuple[datetime | None, datetime | None, datetime | None, datetime | None, str]:
+    now = datetime.now(timezone.utc)
+    if from_date and to_date:
+        try:
+            start = datetime.fromisoformat(from_date.replace("Z", "+00:00")).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
+            end = datetime.fromisoformat(to_date.replace("Z", "+00:00")).replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=timezone.utc)
+            duration = end - start
+            prev_end = start - timedelta(microseconds=1)
+            prev_start = prev_end - duration
+            return start, end, prev_start, prev_end, f"custom_{from_date}_{to_date}"
+        except Exception:
+            pass
+
+    if period == "today":
+        start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
+        end = now
+        prev_start = start - timedelta(days=1)
+        prev_end = start - timedelta(microseconds=1)
+        return start, end, prev_start, prev_end, "today"
+    elif period == "7d":
+        start = now - timedelta(days=7)
+        end = now
+        prev_start = now - timedelta(days=14)
+        prev_end = start
+        return start, end, prev_start, prev_end, "7d"
+    elif period == "30d":
+        start = now - timedelta(days=30)
+        end = now
+        prev_start = now - timedelta(days=60)
+        prev_end = start
+        return start, end, prev_start, prev_end, "30d"
+    elif period == "90d":
+        start = now - timedelta(days=90)
+        end = now
+        prev_start = now - timedelta(days=180)
+        prev_end = start
+        return start, end, prev_start, prev_end, "90d"
+    elif period == "mtd":
+        start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+        end = now
+        days_into = (now - start).total_seconds()
+        if now.month == 1:
+            prev_month_start = datetime(now.year - 1, 12, 1, tzinfo=timezone.utc)
+        else:
+            prev_month_start = datetime(now.year, now.month - 1, 1, tzinfo=timezone.utc)
+        prev_end = prev_month_start + timedelta(seconds=days_into)
+        prev_start = prev_month_start
+        return start, end, prev_start, prev_end, "mtd"
+    elif period == "qtd":
+        q = (now.month - 1) // 3 + 1
+        q_start_month = (q - 1) * 3 + 1
+        start = datetime(now.year, q_start_month, 1, tzinfo=timezone.utc)
+        end = now
+        days_into = (now - start).total_seconds()
+        if q == 1:
+            prev_q_start = datetime(now.year - 1, 10, 1, tzinfo=timezone.utc)
+        else:
+            prev_q_start = datetime(now.year, (q - 2) * 3 + 1, 1, tzinfo=timezone.utc)
+        prev_end = prev_q_start + timedelta(seconds=days_into)
+        prev_start = prev_q_start
+        return start, end, prev_start, prev_end, "qtd"
+
+    return None, None, None, None, "all_time"
+
+
+def safe_growth_delta(current_val: float, prev_val: float) -> float:
+    if prev_val > 0:
+        return round(((current_val - prev_val) / prev_val) * 100.0, 2)
+    return 0.0
+
+
+def filter_bookings_by_range(
+    bookings: list[Booking],
+    paid_booking_ids: set[int],
+    start_time: datetime | None,
+    end_time: datetime | None,
+) -> list[Booking]:
+    filtered = []
+    for b in bookings:
+        if b.id not in paid_booking_ids or b.status == "cancelled":
+            continue
+        b_time = b.created_at
+        if b_time.tzinfo is None:
+            b_time = b_time.replace(tzinfo=timezone.utc)
+        if start_time and b_time < start_time:
+            continue
+        if end_time and b_time > end_time:
+            continue
+        filtered.append(b)
+    return filtered
+
+
+def get_payout_aging_breakdown(session: Session) -> PayoutAgingBreakdown:
+    sync_commission_ledger(session)
+    now = datetime.now(timezone.utc)
+    ledgers = session.exec(select(CommissionLedger)).all()
+
+    held_total = sum(l.local_amount for l in ledgers if l.payout_status == "held")
+    held_count = len([l for l in ledgers if l.payout_status == "held"])
+    unpaid_total = sum(l.local_amount for l in ledgers if l.payout_status == "unpaid")
+    unpaid_count = len([l for l in ledgers if l.payout_status == "unpaid"])
+    scheduled_total = sum(l.local_amount for l in ledgers if l.payout_status == "scheduled")
+    scheduled_count = len([l for l in ledgers if l.payout_status == "scheduled"])
+
+    # Aging for outstanding liabilities (unpaid & scheduled)
+    b0_7_amount, b0_7_items, b0_7_locals = 0.0, 0, set()
+    b8_14_amount, b8_14_items, b8_14_locals = 0.0, 0, set()
+    b15_30_amount, b15_30_items, b15_30_locals = 0.0, 0, set()
+    b30plus_amount, b30plus_items, b30plus_locals = 0.0, 0, set()
+
+    for l in ledgers:
+        if l.payout_status in {"unpaid", "scheduled"}:
+            booking = session.get(Booking, l.booking_id)
+            ref_time = l.updated_at
+            if ref_time.tzinfo is None:
+                ref_time = ref_time.replace(tzinfo=timezone.utc)
+            days = (now - ref_time).days
+            local_id = booking.local_profile_id if booking else 0
+
+            if days <= 7:
+                b0_7_amount += l.local_amount
+                b0_7_items += 1
+                b0_7_locals.add(local_id)
+            elif days <= 14:
+                b8_14_amount += l.local_amount
+                b8_14_items += 1
+                b8_14_locals.add(local_id)
+            elif days <= 30:
+                b15_30_amount += l.local_amount
+                b15_30_items += 1
+                b15_30_locals.add(local_id)
+            else:
+                b30plus_amount += l.local_amount
+                b30plus_items += 1
+                b30plus_locals.add(local_id)
+
+    buckets = [
+        PayoutAgingBucket(bucket_label="0-7d", amount=round(b0_7_amount, 2), count=b0_7_items, local_count=len(b0_7_locals)),
+        PayoutAgingBucket(bucket_label="8-14d", amount=round(b8_14_amount, 2), count=b8_14_items, local_count=len(b8_14_locals)),
+        PayoutAgingBucket(bucket_label="15-30d", amount=round(b15_30_amount, 2), count=b15_30_items, local_count=len(b15_30_locals)),
+        PayoutAgingBucket(bucket_label="30d+", amount=round(b30plus_amount, 2), count=b30plus_items, local_count=len(b30plus_locals)),
+    ]
+
+    return PayoutAgingBreakdown(
+        total_unpaid_liability=round(unpaid_total, 2),
+        unpaid_count=unpaid_count,
+        total_scheduled_liability=round(scheduled_total, 2),
+        scheduled_count=scheduled_count,
+        total_held_liability=round(held_total, 2),
+        held_count=held_count,
+        buckets=buckets,
+    )
+
+
+@app.get("/api/admin/revenue/analytics", response_model=RevenueAnalyticsResponse)
+def admin_revenue_analytics(
+    _: Annotated[User, Depends(admin_user)],
+    session: Annotated[Session, Depends(get_session)],
+    period: str = "all_time",
+    from_date: str | None = None,
+    to_date: str | None = None,
+):
+    start_time, end_time, prev_start, prev_end, period_label = parse_date_window(period, from_date, to_date)
+    now = datetime.now(timezone.utc)
+
+    bookings = session.exec(select(Booking).order_by(Booking.created_at.desc())).all()
+    payments = session.exec(select(PaymentRecord)).all()
+    paid_booking_ids = {p.booking_id for p in payments if p.status == "paid"}
+
+    # Current window bookings
+    current_bookings = filter_bookings_by_range(bookings, paid_booking_ids, start_time, end_time)
+    # Previous window bookings for comparison
+    prev_bookings = filter_bookings_by_range(bookings, paid_booking_ids, prev_start, prev_end) if prev_start and prev_end else []
+
+    # Current KPIs
+    total_subtotal = sum(b.subtotal for b in current_bookings)
+    total_platform_fee = sum(b.platform_fee for b in current_bookings)
+    total_discount_spent = sum(getattr(b, "discount_amount", 0.0) or 0.0 for b in current_bookings)
+    gbv = sum(b.subtotal + b.platform_fee - (getattr(b, "discount_amount", 0.0) or 0.0) for b in current_bookings)
+    net_platform_revenue = total_platform_fee - total_discount_spent
+    take_rate_pct = round((net_platform_revenue / total_subtotal * 100), 2) if total_subtotal > 0 else 12.0
+
+    # Referral liabilities
+    referral_attributions = session.exec(select(ReferralAttribution)).all()
+    filtered_referrals = []
+    for r in referral_attributions:
+        if r.status not in {"credited", "qualified", "rewarded"}:
+            continue
+        r_time = r.created_at
+        if r_time.tzinfo is None:
+            r_time = r_time.replace(tzinfo=timezone.utc)
+        if start_time and r_time < start_time:
+            continue
+        if end_time and r_time > end_time:
+            continue
+        filtered_referrals.append(r)
+    total_referral_cost = sum(r.reward_amount for r in filtered_referrals)
+
+    # Refunds
+    refunded_records = [p for p in payments if p.status == "refunded"]
+    if start_time or end_time:
+        filtered_refunds = []
+        for p in refunded_records:
+            p_time = p.refunded_at or p.updated_at
+            if p_time.tzinfo is None:
+                p_time = p_time.replace(tzinfo=timezone.utc)
+            if start_time and p_time < start_time:
+                continue
+            if end_time and p_time > end_time:
+                continue
+            filtered_refunds.append(p)
+        refunded_records = filtered_refunds
+    total_refund_volume = sum((p.refunded_minor / 100.0) for p in refunded_records)
+
+    # Previous comparison metrics
+    prev_subtotal = sum(b.subtotal for b in prev_bookings)
+    prev_platform_fee = sum(b.platform_fee for b in prev_bookings)
+    prev_discount = sum(getattr(b, "discount_amount", 0.0) or 0.0 for b in prev_bookings)
+    prev_gbv = sum(b.subtotal + b.platform_fee - (getattr(b, "discount_amount", 0.0) or 0.0) for b in prev_bookings)
+    prev_net_rev = prev_platform_fee - prev_discount
+
+    gbv_delta_pct = safe_growth_delta(gbv, prev_gbv)
+    net_rev_delta_pct = safe_growth_delta(net_platform_revenue, prev_net_rev)
+    paid_count_delta_pct = safe_growth_delta(len(current_bookings), len(prev_bookings))
+
+    # Payout totals
+    sync_commission_ledger(session)
+    ledger_entries = session.exec(select(CommissionLedger)).all()
+    payout_held = sum(l.local_amount for l in ledger_entries if l.payout_status == "held")
+    payout_unpaid = sum(l.local_amount for l in ledger_entries if l.payout_status == "unpaid")
+    payout_paid = sum(l.local_amount for l in ledger_entries if l.payout_status == "paid")
+
+    kpis = RevenueKPIOverview(
+        period=period_label,
+        start_date=start_time.isoformat() if start_time else None,
+        end_date=end_time.isoformat() if end_time else None,
+        gbv=round(gbv, 2),
+        total_local_payable=round(total_subtotal, 2),
+        total_platform_fee=round(total_platform_fee, 2),
+        total_discount_spent=round(total_discount_spent, 2),
+        total_referral_cost=round(total_referral_cost, 2),
+        net_platform_revenue=round(net_platform_revenue, 2),
+        effective_take_rate=round(take_rate_pct, 2),
+        paid_bookings_count=len(current_bookings),
+        total_refund_volume=round(total_refund_volume, 2),
+        refund_count=len(refunded_records),
+        payout_held=round(payout_held, 2),
+        payout_unpaid=round(payout_unpaid, 2),
+        payout_paid=round(payout_paid, 2),
+        gbv_delta_pct=gbv_delta_pct,
+        net_revenue_delta_pct=net_rev_delta_pct,
+        paid_bookings_delta_pct=paid_count_delta_pct,
+        currency=settings.payment_currency.upper(),
+    )
+
+    # Time-series trend bucketing
+    trends_map: dict[str, dict] = {}
+    trend_start = start_time or (now - timedelta(days=30))
+    trend_end = end_time or now
+    days_span = max((trend_end - trend_start).days, 1)
+
+    # Generate ordered empty buckets
+    if days_span <= 31:
+        cur = trend_start
+        while cur <= trend_end:
+            key = cur.strftime("%Y-%m-%d")
+            trends_map[key] = {"date": key, "label": cur.strftime("%b %d"), "gbv": 0.0, "net_revenue": 0.0, "platform_fee": 0.0, "discounts": 0.0, "refunds": 0.0, "local_payable": 0.0, "bookings_count": 0}
+            cur += timedelta(days=1)
+    elif days_span <= 95:
+        cur = trend_start
+        while cur <= trend_end:
+            key = cur.strftime("%Y-W%W")
+            trends_map[key] = {"date": key, "label": f"Wk {cur.strftime('%W')}", "gbv": 0.0, "net_revenue": 0.0, "platform_fee": 0.0, "discounts": 0.0, "refunds": 0.0, "local_payable": 0.0, "bookings_count": 0}
+            cur += timedelta(days=7)
+    else:
+        cur = datetime(trend_start.year, trend_start.month, 1, tzinfo=timezone.utc)
+        while cur <= trend_end:
+            key = cur.strftime("%Y-%m")
+            trends_map[key] = {"date": key, "label": cur.strftime("%b %Y"), "gbv": 0.0, "net_revenue": 0.0, "platform_fee": 0.0, "discounts": 0.0, "refunds": 0.0, "local_payable": 0.0, "bookings_count": 0}
+            if cur.month == 12:
+                cur = datetime(cur.year + 1, 1, 1, tzinfo=timezone.utc)
+            else:
+                cur = datetime(cur.year, cur.month + 1, 1, tzinfo=timezone.utc)
+
+    for b in current_bookings:
+        b_time = b.created_at
+        if b_time.tzinfo is None:
+            b_time = b_time.replace(tzinfo=timezone.utc)
+        if days_span <= 31:
+            key = b_time.strftime("%Y-%m-%d")
+        elif days_span <= 95:
+            key = b_time.strftime("%Y-W%W")
+        else:
+            key = b_time.strftime("%Y-%m")
+
+        if key in trends_map:
+            disc = getattr(b, "discount_amount", 0.0) or 0.0
+            row_gbv = b.subtotal + b.platform_fee - disc
+            trends_map[key]["gbv"] += row_gbv
+            trends_map[key]["platform_fee"] += b.platform_fee
+            trends_map[key]["discounts"] += disc
+            trends_map[key]["net_revenue"] += (b.platform_fee - disc)
+            trends_map[key]["local_payable"] += b.subtotal
+            trends_map[key]["bookings_count"] += 1
+
+    trend_series = [
+        RevenueTrendPoint(
+            date=v["date"],
+            label=v["label"],
+            gbv=round(v["gbv"], 2),
+            net_revenue=round(v["net_revenue"], 2),
+            platform_fee=round(v["platform_fee"], 2),
+            discounts=round(v["discounts"], 2),
+            refunds=round(v["refunds"], 2),
+            local_payable=round(v["local_payable"], 2),
+            bookings_count=v["bookings_count"],
+        )
+        for v in trends_map.values()
+    ]
+
+    # Dimensional Analytics
+    # 1. By City
+    cities_map: dict[str, dict] = {}
+    for b in current_bookings:
+        local = session.get(LocalProfile, b.local_profile_id)
+        city_name = (local.city_name if local else "") or getattr(b, "city_name", "") or "Global / Custom"
+        country_code = (local.country_code if local else "") or "GB"
+        c_key = f"{city_name}:{country_code}".lower()
+        if c_key not in cities_map:
+            cities_map[c_key] = {"city_name": city_name, "country_code": country_code, "count": 0, "gbv": 0.0, "local_payable": 0.0, "platform_revenue": 0.0}
+        disc = getattr(b, "discount_amount", 0.0) or 0.0
+        cities_map[c_key]["count"] += 1
+        cities_map[c_key]["gbv"] += (b.subtotal + b.platform_fee - disc)
+        cities_map[c_key]["local_payable"] += b.subtotal
+        cities_map[c_key]["platform_revenue"] += (b.platform_fee - disc)
+
+    by_city = [
+        CityRevenueItem(
+            city_name=v["city_name"],
+            country_code=v["country_code"],
+            paid_bookings_count=v["count"],
+            gbv=round(v["gbv"], 2),
+            local_payable=round(v["local_payable"], 2),
+            platform_revenue=round(v["platform_revenue"], 2),
+            effective_take_rate=round((v["platform_revenue"] / v["local_payable"] * 100), 2) if v["local_payable"] > 0 else 12.0,
+        )
+        for v in sorted(cities_map.values(), key=lambda x: x["gbv"], reverse=True)
+    ]
+
+    # 2. By Category
+    categories_map: dict[str, dict] = {}
+    for b in current_bookings:
+        service = session.get(Service, b.service_id) if b.service_id else None
+        cat_name = service.category if service else "Custom Itinerary"
+        if cat_name not in categories_map:
+            categories_map[cat_name] = {"category_name": cat_name, "count": 0, "gbv": 0.0, "local_payable": 0.0, "platform_revenue": 0.0}
+        disc = getattr(b, "discount_amount", 0.0) or 0.0
+        categories_map[cat_name]["count"] += 1
+        categories_map[cat_name]["gbv"] += (b.subtotal + b.platform_fee - disc)
+        categories_map[cat_name]["local_payable"] += b.subtotal
+        categories_map[cat_name]["platform_revenue"] += (b.platform_fee - disc)
+
+    by_category = [
+        CategoryRevenueItem(
+            category_name=v["category_name"],
+            paid_bookings_count=v["count"],
+            gbv=round(v["gbv"], 2),
+            local_payable=round(v["local_payable"], 2),
+            platform_revenue=round(v["platform_revenue"], 2),
+        )
+        for v in sorted(categories_map.values(), key=lambda x: x["gbv"], reverse=True)
+    ]
+
+    # 3. By Local Partner
+    locals_map: dict[int, dict] = {}
+    for b in current_bookings:
+        lid = b.local_profile_id
+        if lid not in locals_map:
+            local = session.get(LocalProfile, lid)
+            locals_map[lid] = {"local_id": lid, "local_name": local.display_name if local else f"Local #{lid}", "city_name": local.city_name if local else "", "count": 0, "gross_earnings": 0.0, "platform_rev": 0.0}
+        disc = getattr(b, "discount_amount", 0.0) or 0.0
+        locals_map[lid]["count"] += 1
+        locals_map[lid]["gross_earnings"] += b.subtotal
+        locals_map[lid]["platform_rev"] += (b.platform_fee - disc)
+
+    by_local = [
+        LocalRevenueItem(
+            local_id=v["local_id"],
+            local_name=v["local_name"],
+            city_name=v["city_name"],
+            paid_bookings_count=v["count"],
+            gross_earnings=round(v["gross_earnings"], 2),
+            platform_revenue_generated=round(v["platform_rev"], 2),
+        )
+        for v in sorted(locals_map.values(), key=lambda x: x["gross_earnings"], reverse=True)
+    ]
+
+    # 4. By Promo Campaign
+    promos = session.exec(select(PromoCode)).all()
+    redemptions = session.exec(select(PromoRedemption)).all()
+    by_promo = []
+    for promo in promos:
+        p_reds = [r for r in redemptions if r.promo_code_id == promo.id]
+        if start_time or end_time:
+            filtered_p_reds = []
+            for r in p_reds:
+                r_time = r.created_at
+                if r_time.tzinfo is None:
+                    r_time = r_time.replace(tzinfo=timezone.utc)
+                if start_time and r_time < start_time:
+                    continue
+                if end_time and r_time > end_time:
+                    continue
+                filtered_p_reds.append(r)
+            p_reds = filtered_p_reds
+        burn = sum(r.discount_amount for r in p_reds)
+        p_booking_ids = {r.booking_id for r in p_reds}
+        p_bookings = [b for b in current_bookings if b.id in p_booking_ids]
+        p_gbv = sum(b.subtotal + b.platform_fee - (getattr(b, "discount_amount", 0.0) or 0.0) for b in p_bookings)
+        p_net = sum(b.platform_fee - (getattr(b, "discount_amount", 0.0) or 0.0) for b in p_bookings)
+        if p_reds or promo.is_active:
+            by_promo.append(PromoRevenueItem(
+                code=promo.code,
+                discount_type=f"{promo.discount_value}%" if promo.discount_type == "percentage" else f"${promo.discount_value}",
+                redemptions_count=len(p_reds),
+                total_discount_burn=round(burn, 2),
+                associated_gbv=round(p_gbv, 2),
+                net_platform_revenue=round(p_net, 2),
+            ))
+
+    # 5. By Referral Channel
+    ref_codes = session.exec(select(ReferralCode)).all()
+    by_referral = []
+    for rc in ref_codes:
+        r_attrs = [a for a in referral_attributions if a.referral_code_id == rc.id]
+        if start_time or end_time:
+            filtered_r_attrs = []
+            for a in r_attrs:
+                a_time = a.created_at
+                if a_time.tzinfo is None:
+                    a_time = a_time.replace(tzinfo=timezone.utc)
+                if start_time and a_time < start_time:
+                    continue
+                if end_time and a_time > end_time:
+                    continue
+                filtered_r_attrs.append(a)
+            r_attrs = filtered_r_attrs
+        q_count = len([a for a in r_attrs if a.status in {"credited", "qualified", "rewarded"}])
+        credits_earned = sum(a.reward_amount for a in r_attrs if a.status in {"credited", "qualified", "rewarded"})
+        r_booking_ids = {a.qualifying_booking_id for a in r_attrs if getattr(a, "qualifying_booking_id", None)}
+        r_bookings = [b for b in current_bookings if b.id in r_booking_ids]
+        r_gbv = sum(b.subtotal + b.platform_fee - (getattr(b, "discount_amount", 0.0) or 0.0) for b in r_bookings)
+        referrer = session.get(User, rc.user_id)
+        if r_attrs or getattr(rc, "is_active", True):
+            by_referral.append(ReferralRevenueItem(
+                code=rc.code,
+                referrer_name=referrer.full_name if referrer else f"User #{rc.user_id}",
+                total_referred_users=getattr(rc, "total_referred_count", 0),
+                qualified_bookings_count=q_count,
+                total_credits_earned=round(credits_earned, 2),
+                generated_booking_value=round(r_gbv, 2),
+            ))
+
+    # Payment Lifecycle Stats
+    all_payments = session.exec(select(PaymentRecord)).all()
+    if start_time or end_time:
+        filtered_payments = []
+        for p in all_payments:
+            p_time = p.created_at
+            if p_time.tzinfo is None:
+                p_time = p_time.replace(tzinfo=timezone.utc)
+            if start_time and p_time < start_time:
+                continue
+            if end_time and p_time > end_time:
+                continue
+            filtered_payments.append(p)
+        all_payments = filtered_payments
+
+    p_total = len(all_payments)
+    p_paid = len([p for p in all_payments if p.status == "paid"])
+    p_proc = len([p for p in all_payments if p.status == "processing"])
+    p_fail = len([p for p in all_payments if p.status == "failed"])
+    p_ref = len([p for p in all_payments if p.status == "refunded"])
+
+    payment_stats = PaymentLifecycleStats(
+        total_payment_attempts=p_total,
+        paid_count=p_paid,
+        processing_count=p_proc,
+        failed_count=p_fail,
+        refunded_count=p_ref,
+        success_rate_pct=round((p_paid / p_total * 100), 2) if p_total > 0 else 100.0,
+        failure_rate_pct=round((p_fail / p_total * 100), 2) if p_total > 0 else 0.0,
+        refund_rate_pct=round((p_ref / p_paid * 100), 2) if p_paid > 0 else 0.0,
+    )
+
+    # Payout Aging
+    payout_aging = get_payout_aging_breakdown(session)
+
+    return RevenueAnalyticsResponse(
+        kpis=kpis,
+        trends=trend_series,
+        by_city=by_city,
+        by_category=by_category,
+        by_local=by_local,
+        by_promo=by_promo,
+        by_referral=by_referral,
+        payment_stats=payment_stats,
+        payout_aging=payout_aging,
+    )
+
+
+@app.get("/api/admin/revenue/reconciliation", response_model=list[ReconciliationRow])
+def admin_revenue_reconciliation(
+    _: Annotated[User, Depends(admin_user)],
+    session: Annotated[Session, Depends(get_session)],
+    period: str = "all_time",
+    from_date: str | None = None,
+    to_date: str | None = None,
+):
+    start_time, end_time, _, _, _ = parse_date_window(period, from_date, to_date)
+    sync_commission_ledger(session)
+
+    bookings = session.exec(select(Booking).order_by(Booking.created_at.desc())).all()
+    payments = session.exec(select(PaymentRecord)).all()
+    ledgers = session.exec(select(CommissionLedger)).all()
+
+    payment_by_booking = {p.booking_id: p for p in payments}
+    ledger_by_booking = {l.booking_id: l for l in ledgers}
+
+    rows = []
+    for b in bookings:
+        b_time = b.created_at
+        if b_time.tzinfo is None:
+            b_time = b_time.replace(tzinfo=timezone.utc)
+        if start_time and b_time < start_time:
+            continue
+        if end_time and b_time > end_time:
+            continue
+
+        tourist = session.get(User, b.tourist_user_id)
+        local = session.get(LocalProfile, b.local_profile_id)
+        pay = payment_by_booking.get(b.id)
+        led = ledger_by_booking.get(b.id)
+
+        disc = getattr(b, "discount_amount", 0.0) or 0.0
+        expected_total = round(b.subtotal + b.platform_fee - disc, 2)
+        charged_amt = round(pay.amount_total_minor / 100.0, 2) if pay else 0.0
+
+        # Discrepancy Classification
+        reconciliation_status = "matched"
+        discrepancy_note = "All records synchronized"
+
+        if not pay:
+            if settings.payment_required and b.status not in {"cancelled", "rejected"}:
+                reconciliation_status = "mismatch"
+                discrepancy_note = "Missing payment record for active booking"
+            else:
+                reconciliation_status = "matched"
+                discrepancy_note = "Manual or free booking"
+        elif not led:
+            reconciliation_status = "mismatch"
+            discrepancy_note = "Missing commission ledger entry"
+        elif abs(charged_amt - expected_total) > 0.02 and pay.status == "paid":
+            reconciliation_status = "mismatch"
+            discrepancy_note = f"Charged amount (${charged_amt}) differs from booking total (${expected_total})"
+        elif b.status == "completed" and led and led.payout_status == "held":
+            reconciliation_status = "warning"
+            discrepancy_note = "Booking completed but local payout remains held"
+        elif b.status == "cancelled" and pay.status == "paid":
+            reconciliation_status = "warning"
+            discrepancy_note = "Booking cancelled while payment is captured (refund pending)"
+        elif pay.status == "failed":
+            reconciliation_status = "warning"
+            discrepancy_note = "Payment failed at gateway"
+
+        rows.append(ReconciliationRow(
+            booking_id=b.id,
+            booking_status=b.status,
+            traveler_name=tourist.full_name if tourist else f"Tourist #{b.tourist_user_id}",
+            local_name=local.display_name if local else f"Local #{b.local_profile_id}",
+            booking_total=expected_total,
+            payment_status=pay.status if pay else "unpaid",
+            safepay_tracker=pay.payment_intent_id if pay else "",
+            charged_amount=charged_amt,
+            commission_gross=led.gross_amount if led else 0.0,
+            local_payable=led.local_amount if led else round(b.subtotal, 2),
+            platform_fee=led.platform_fee if led else round(b.platform_fee, 2),
+            payout_status=led.payout_status if led else "unpaid",
+            reconciliation_status=reconciliation_status,
+            discrepancy_note=discrepancy_note,
+        ))
+
+    return rows
+
+
+@app.get("/api/admin/revenue/payout-aging", response_model=PayoutAgingBreakdown)
+def admin_revenue_payout_aging(
+    _: Annotated[User, Depends(admin_user)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    return get_payout_aging_breakdown(session)
+
+
+@app.post("/api/admin/commission/batch-update", response_model=BatchPayoutResult)
+def admin_commission_batch_update(
+    payload: BatchPayoutInput,
+    admin: Annotated[User, Depends(admin_user)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    if not payload.ledger_ids:
+        raise HTTPException(400, "No settlement records specified for batch update")
+
+    updated_ids = []
+    total_amount = 0.0
+
+    for lid in payload.ledger_ids:
+        row = session.get(CommissionLedger, lid)
+        if not row:
+            continue
+        if row.payout_status == "void":
+            raise HTTPException(400, f"Cannot transition void ledger entry #{lid}")
+        if row.payout_status == "paid" and payload.target_status == "paid":
+            # Already paid - skip to maintain idempotency
+            continue
+
+        row.payout_status = payload.target_status
+        if payload.reference_note:
+            existing_note = row.notes or ""
+            row.notes = f"{existing_note} [Batch: {payload.reference_note}]".strip()[:2000]
+        row.updated_at = datetime.now(timezone.utc)
+        session.add(row)
+        updated_ids.append(row.id)
+        total_amount += row.local_amount
+        audit_event(session, admin.id, "admin.commission_batch_update", "commission_ledger", row.id, f"Batch update status to {payload.target_status}; ref: {payload.reference_note}")
+
+    session.commit()
+    return BatchPayoutResult(
+        updated_count=len(updated_ids),
+        target_status=payload.target_status,
+        total_amount=round(total_amount, 2),
+        updated_ids=updated_ids,
+    )
+
+
+@app.get("/api/admin/revenue/export/summary")
+def admin_export_revenue_summary(
+    _: Annotated[User, Depends(admin_user)],
+    session: Annotated[Session, Depends(get_session)],
+    period: str = "all_time",
+    from_date: str | None = None,
+    to_date: str | None = None,
+):
+    analytics = admin_revenue_analytics(_, session, period, from_date, to_date)
+    k = analytics.kpis
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Period", "Start Date", "End Date", "Gross Booking Value",
+        "Local Payables", "Platform Fees", "Promo Subsidies",
+        "Referral Costs", "Net Platform Revenue", "Effective Take Rate (%)",
+        "Paid Bookings Count", "Refund Volume", "Refund Count", "Currency",
+    ])
+    writer.writerow([
+        k.period, k.start_date or "N/A", k.end_date or "N/A", k.gbv,
+        k.total_local_payable, k.total_platform_fee, k.total_discount_spent,
+        k.total_referral_cost, k.net_platform_revenue, k.effective_take_rate,
+        k.paid_bookings_count, k.total_refund_volume, k.refund_count, k.currency,
+    ])
+
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=hirealocals_revenue_summary_{period}.csv"},
+    )
+
+
+@app.get("/api/admin/revenue/export/settlements")
+def admin_export_settlements(
+    _: Annotated[User, Depends(admin_user)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    sync_commission_ledger(session)
+    ledgers = session.exec(select(CommissionLedger).order_by(CommissionLedger.updated_at.desc())).all()
+    now = datetime.now(timezone.utc)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Ledger ID", "Booking ID", "Local Partner Name", "Local Email",
+        "Local Payable Amount", "Currency", "Payout Status",
+        "Aging (Days)", "Last Updated (UTC)", "Settlement Notes",
+    ])
+
+    for l in ledgers:
+        b = session.get(Booking, l.booking_id)
+        local = session.get(LocalProfile, b.local_profile_id) if b else None
+        local_user = session.get(User, local.user_id) if local else None
+        ref_time = l.updated_at
+        if ref_time.tzinfo is None:
+            ref_time = ref_time.replace(tzinfo=timezone.utc)
+        aging_days = (now - ref_time).days
+
+        writer.writerow([
+            l.id, l.booking_id, local.display_name if local else "N/A",
+            local_user.email if local_user else "N/A", l.local_amount,
+            settings.payment_currency.upper(), l.payout_status,
+            aging_days, l.updated_at.isoformat(), l.notes or "",
+        ])
+
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=hirealocals_payout_manifest.csv"},
+    )
+
+
+@app.get("/api/admin/revenue/export/reconciliation")
+def admin_export_reconciliation(
+    _: Annotated[User, Depends(admin_user)],
+    session: Annotated[Session, Depends(get_session)],
+    period: str = "all_time",
+    from_date: str | None = None,
+    to_date: str | None = None,
+):
+    rows = admin_revenue_reconciliation(_, session, period, from_date, to_date)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Booking ID", "Booking Status", "Traveler Name", "Local Partner Name",
+        "Booking Total", "Payment Status", "Safepay Tracker", "Charged Total",
+        "Local Payable", "Platform Fee", "Payout Status",
+        "Reconciliation Status", "Discrepancy Notes",
+    ])
+
+    for r in rows:
+        writer.writerow([
+            r.booking_id, r.booking_status, r.traveler_name, r.local_name,
+            r.booking_total, r.payment_status, r.safepay_tracker, r.charged_amount,
+            r.local_payable, r.platform_fee, r.payout_status,
+            r.reconciliation_status, r.discrepancy_note,
+        ])
+
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=hirealocals_reconciliation_ledger_{period}.csv"},
+    )
+
+
+@app.get("/api/admin/revenue/export/marketing")
+def admin_export_marketing(
+    _: Annotated[User, Depends(admin_user)],
+    session: Annotated[Session, Depends(get_session)],
+    period: str = "all_time",
+    from_date: str | None = None,
+    to_date: str | None = None,
+):
+    analytics = admin_revenue_analytics(_, session, period, from_date, to_date)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["=== PROMOTIONAL CAMPAIGNS ==="])
+    writer.writerow(["Promo Code", "Discount Type", "Redemptions Count", "Total Discount Burn", "Associated GBV", "Net Platform Revenue Yield"])
+    for p in analytics.by_promo:
+        writer.writerow([p.code, p.discount_type, p.redemptions_count, p.total_discount_burn, p.associated_gbv, p.net_platform_revenue])
+
+    writer.writerow([])
+    writer.writerow(["=== REFERRAL CHANNELS ==="])
+    writer.writerow(["Referral Code", "Referrer Name", "Referred Users Count", "Qualified Bookings Count", "Total Credits Earned", "Generated Booking Value"])
+    for r in analytics.by_referral:
+        writer.writerow([r.code, r.referrer_name, r.total_referred_users, r.qualified_bookings_count, r.total_credits_earned, r.generated_booking_value])
+
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=hirealocals_marketing_audit_{period}.csv"},
+    )
 
 
 @app.get("/api/admin/demand/summary", response_model=DemandSummaryResponse)

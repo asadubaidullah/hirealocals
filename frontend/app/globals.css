@@ -37051,5 +37051,42 @@ html[data-theme="dark"] .admin-kyc-preview-frame{
 }
 /* POINT 7 — SEO & MARKETPLACE DEMAND CAPTURE STYLES END */
 
+/* POINT 8 — ADMIN REVENUE COMMAND CENTER STYLES START */
+.revenue-command-center {
+  color-scheme: dark;
+}
+
+.revenue-kpi-card {
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.revenue-kpi-card:hover {
+  border-color: rgba(16, 185, 129, 0.4);
+  transform: translateY(-1px);
+}
+
+.recon-status-matched {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.recon-status-warning {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.recon-status-mismatch {
+  background-color: rgba(244, 63, 94, 0.15);
+  color: #fb7185;
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.payout-aging-pill {
+  font-feature-settings: "tnum";
+}
+/* POINT 8 — ADMIN REVENUE COMMAND CENTER STYLES END */
+
 
 

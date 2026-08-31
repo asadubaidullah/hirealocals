@@ -23,6 +23,7 @@ import {
   Sparkles,
   Star,
   Tags,
+  TrendingUp,
   UserRoundCheck,
   Users,
 } from "lucide-react";
@@ -52,6 +53,11 @@ const groups: NavGroup[] = [
         href: "/admin",
         label: "Dashboard",
         icon: LayoutDashboard,
+      },
+      {
+        href: "/admin/revenue",
+        label: "Revenue",
+        icon: TrendingUp,
       },
     ],
   },
