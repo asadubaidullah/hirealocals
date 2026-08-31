@@ -36551,5 +36551,166 @@ html[data-theme="dark"] .admin-kyc-preview-frame{
 
 /* POINT 4 END */
 
+/* POINT 5 — REVIEWS & TRUST STYLES START */
+
+.rating-breakdown-box {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-top: 16px;
+  margin-bottom: 24px;
+}
+
+:is(html.dark, html[data-theme="dark"]) .rating-breakdown-box {
+  background: var(--bg-card, #131d2e);
+  border-color: var(--border-color, #233248);
+}
+
+.breakdown-score-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 140px;
+  text-align: center;
+  border-right: 1px solid var(--border-color, #e2e8f0);
+  padding-right: 24px;
+}
+
+:is(html.dark, html[data-theme="dark"]) .breakdown-score-col {
+  border-color: var(--border-color, #233248);
+}
+
+.breakdown-score-col .big-score {
+  font-size: 38px;
+  font-weight: 800;
+  color: var(--text-primary, #0f172a);
+  line-height: 1;
+}
+
+:is(html.dark, html[data-theme="dark"]) .breakdown-score-col .big-score {
+  color: #f8fafc;
+}
+
+.breakdown-score-col .stars-row {
+  display: flex;
+  gap: 2px;
+  margin: 6px 0 4px 0;
+}
+
+.breakdown-score-col .score-count-label {
+  font-size: 12px;
+}
+
+.breakdown-bars-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.rating-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.rating-bar-row .bar-label {
+  width: 32px;
+  font-weight: 600;
+  color: var(--text-primary, #334155);
+}
+
+:is(html.dark, html[data-theme="dark"]) .rating-bar-row .bar-label {
+  color: #cbd5e1;
+}
+
+.rating-bar-track {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-muted, #f1f5f9);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+:is(html.dark, html[data-theme="dark"]) .rating-bar-track {
+  background: #1e293b;
+}
+
+.rating-bar-fill {
+  height: 100%;
+  background: #f59e0b;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.rating-bar-row .bar-count-label {
+  width: 55px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-muted, #64748b);
+}
+
+.verified-experience-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+  margin-left: 8px;
+}
+
+:is(html.dark, html[data-theme="dark"]) .verified-experience-badge {
+  background: #06231a;
+  color: #6ee7b7;
+  border-color: #059669;
+}
+
+.local-reviews-hub-container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.local-review-card {
+  transition: border-color 0.2s;
+}
+
+.local-review-card:hover {
+  border-color: var(--brand-primary, #0284c7);
+}
+
+@media (max-width: 640px) {
+  .rating-breakdown-box {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    padding: 16px;
+  }
+  .breakdown-score-col {
+    border-right: none;
+    border-bottom: 1px solid var(--border-color, #e2e8f0);
+    padding-right: 0;
+    padding-bottom: 14px;
+  }
+  :is(html.dark, html[data-theme="dark"]) .breakdown-score-col {
+    border-bottom-color: var(--border-color, #233248);
+  }
+}
+
+/* POINT 5 — REVIEWS & TRUST STYLES END */
+
 
 

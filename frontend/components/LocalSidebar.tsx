@@ -13,6 +13,7 @@ import {
   Menu,
   MessageCircle,
   Sparkles,
+  Star,
   UserRound,
   WalletCards,
   X,
@@ -75,6 +76,11 @@ const links = [
     icon: WalletCards,
   },
   {
+    label: "Reviews",
+    href: "/local-dashboard/reviews",
+    icon: Star,
+  },
+  {
     label: "Profile",
     href: "/local-dashboard/profile",
     icon: UserRound,
@@ -100,7 +106,8 @@ const mobileMoreLinks = [
   links[4], // Availability
   links[6], // Notifications
   links[7], // Earnings
-  links[8], // Profile
+  links[8], // Reviews
+  links[9], // Profile
 ] as const;
 
 
@@ -464,7 +471,9 @@ export default function LocalSidebar({
                                 ? "Updates and account activity"
                                 : (label as string) === "Earnings"
                                   ? "Booking value and earnings"
-                                  : "Public profile and account details"
+                                  : (label as string) === "Reviews"
+                                    ? "Traveler reviews and ratings"
+                                    : "Public profile and account details"
                         }
                       </small>
                     </span>

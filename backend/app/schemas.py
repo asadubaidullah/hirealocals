@@ -298,3 +298,7 @@ class RequestOfferInput(BaseModel):
     proposal_message: str = Field(min_length=10, max_length=4000)
     inclusions: str = Field(default="", max_length=1000)
 
+
+class ReviewReportInput(BaseModel):
+    reason: str = Field(min_length=2, max_length=60)
+    details: Optional[str] = Field(default="", max_length=1000)

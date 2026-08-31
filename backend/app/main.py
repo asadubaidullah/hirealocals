@@ -55,6 +55,7 @@ from .models import (
     LaunchTask,
     TripRequest,
     RequestOffer,
+    ReviewReport,
 )
 from .schemas import (
     RegisterInput,
@@ -90,6 +91,7 @@ from .schemas import (
     LaunchTaskUpdate,
     TripRequestInput,
     RequestOfferInput,
+    ReviewReportInput,
 )
 from .security import hash_password, verify_password, create_access_token, current_user, admin_user
 from .didit_kyc import router as didit_kyc_router
@@ -1124,13 +1126,16 @@ def local_detail(slug: str, session: Annotated[Session, Depends(get_session)]):
         )
     ).all()
     reviews = session.exec(
-        select(Review).where(Review.local_profile_id == p.id).order_by(Review.created_at.desc()).limit(12)
+        select(Review).where(Review.local_profile_id == p.id).order_by(Review.created_at.desc()).limit(20)
     ).all()
     public_reviews = []
+    distribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
     for review in reviews:
         moderation = session.exec(select(ReviewModeration).where(ReviewModeration.review_id == review.id)).first()
         if moderation and moderation.status == "hidden":
             continue
+        clamped = min(max(int(review.rating), 1), 5)
+        distribution[clamped] += 1
         traveler = session.get(User, review.tourist_user_id)
         public_name = "Traveler"
         if traveler and traveler.full_name.strip():
@@ -1143,8 +1148,24 @@ def local_detail(slug: str, session: Annotated[Session, Depends(get_session)]):
             "comment": review.comment,
             "created_at": review.created_at,
             "traveler_name": public_name,
+            "verified_booking": True,
         })
-    return {"profile": p, "services": services, "availability": availability, "reviews": public_reviews}
+    completed_trips_count = len(
+        session.exec(
+            select(Booking).where(
+                Booking.local_profile_id == p.id,
+                Booking.status == "completed"
+            )
+        ).all()
+    )
+    return {
+        "profile": p,
+        "services": services,
+        "availability": availability,
+        "reviews": public_reviews,
+        "rating_breakdown": distribution,
+        "completed_trips_count": completed_trips_count,
+    }
 
 
 @app.get("/api/locals/{profile_id}/available-slots")
@@ -2090,6 +2111,57 @@ def local_bookings(
     return result
 
 
+@app.get("/api/local/reviews")
+def get_local_reviews(
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    profile = require_local_profile(user, session)
+    reviews = session.exec(
+        select(Review).where(Review.local_profile_id == profile.id).order_by(Review.created_at.desc())
+    ).all()
+
+    items = []
+    distribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+    for r in reviews:
+        moderation = session.exec(select(ReviewModeration).where(ReviewModeration.review_id == r.id)).first()
+        mod_status = moderation.status if moderation else "visible"
+        if mod_status != "hidden":
+            clamped = min(max(int(r.rating), 1), 5)
+            distribution[clamped] += 1
+        tourist = session.get(User, r.tourist_user_id)
+        booking = session.get(Booking, r.booking_id)
+        service = session.get(Service, booking.service_id) if booking and booking.service_id else None
+        reports_count = len(session.exec(select(ReviewReport).where(ReviewReport.review_id == r.id)).all())
+        items.append({
+            "id": r.id,
+            "booking_id": r.booking_id,
+            "rating": r.rating,
+            "title": r.title,
+            "comment": r.comment,
+            "created_at": r.created_at,
+            "tourist_name": tourist.full_name if tourist else "Traveler",
+            "service_title": service.title if service else "General local experience",
+            "booking_date": booking.booking_date if booking else "",
+            "moderation_status": mod_status,
+            "reports_count": reports_count,
+            "verified_booking": True,
+        })
+
+    completed_count = len(session.exec(select(Booking).where(Booking.local_profile_id == profile.id, Booking.status == "completed")).all())
+    visible_count = sum(distribution.values())
+    five_star_pct = round((distribution[5] / visible_count * 100)) if visible_count > 0 else 0
+
+    return {
+        "rating": profile.rating,
+        "review_count": profile.review_count,
+        "distribution": distribution,
+        "completed_count": completed_count,
+        "five_star_percentage": five_star_pct,
+        "reviews": items,
+    }
+
+
 @app.patch("/api/local/bookings/{booking_id}")
 def local_booking_status(
     booking_id: int,
@@ -2544,6 +2616,48 @@ def traveler_reviews(
     return result
 
 
+def recalculate_local_rating(session: Session, local_profile_id: int) -> dict:
+    """
+    Centralized single source of truth for local ratings, review counts,
+    and 1-5 star distribution histograms.
+    Excludes any review where ReviewModeration.status == 'hidden'.
+    Updates and commits LocalProfile.rating and LocalProfile.review_count.
+    """
+    reviews = session.exec(
+        select(Review).where(Review.local_profile_id == local_profile_id)
+    ).all()
+
+    visible_reviews = []
+    distribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+
+    for r in reviews:
+        mod = session.exec(
+            select(ReviewModeration).where(ReviewModeration.review_id == r.id)
+        ).first()
+        if mod and mod.status == "hidden":
+            continue
+        visible_reviews.append(r)
+        clamped = min(max(int(r.rating), 1), 5)
+        distribution[clamped] += 1
+
+    total_count = len(visible_reviews)
+    avg_rating = round(sum(r.rating for r in visible_reviews) / total_count, 2) if total_count > 0 else 0.0
+
+    local = session.get(LocalProfile, local_profile_id)
+    if local:
+        local.rating = avg_rating
+        local.review_count = total_count
+        session.add(local)
+        session.commit()
+        session.refresh(local)
+
+    return {
+        "rating": avg_rating,
+        "review_count": total_count,
+        "distribution": distribution,
+    }
+
+
 @app.post("/api/traveler/reviews")
 def traveler_create_review(
     payload: ReviewInput,
@@ -2571,15 +2685,53 @@ def traveler_create_review(
         comment=payload.comment.strip(),
     )
     session.add(review)
-    old_count = max(local.review_count, 0)
-    old_total = float(local.rating or 0) * old_count
-    local.review_count = old_count + 1
-    local.rating = round((old_total + payload.rating) / local.review_count, 2)
-    session.add(local)
     session.commit()
     session.refresh(review)
+    stats = recalculate_local_rating(session, local.id)
     add_notification(session, local.user_id, "new_review", f"New {review.rating}-star review", f"{user.full_name} reviewed booking #{booking.id}.", f"/locals/{local.slug}", email=True)
-    return {"ok": True, "id": review.id, "local_rating": local.rating, "local_review_count": local.review_count}
+    return {
+        "ok": True,
+        "id": review.id,
+        "local_rating": stats["rating"],
+        "local_review_count": stats["review_count"],
+        "distribution": stats["distribution"],
+    }
+
+
+@app.post("/api/reviews/{review_id}/report")
+def report_review(
+    review_id: int,
+    payload: ReviewReportInput,
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    review = session.get(Review, review_id)
+    if not review:
+        raise HTTPException(404, "Review not found")
+    allowed_reasons = {"spam", "harassment", "fraud", "privacy", "other"}
+    if payload.reason.lower() not in allowed_reasons:
+        raise HTTPException(400, "Invalid report reason")
+    existing = session.exec(
+        select(ReviewReport).where(
+            ReviewReport.review_id == review_id,
+            ReviewReport.reporter_user_id == user.id,
+        )
+    ).first()
+    if existing:
+        raise HTTPException(409, "You have already reported this review")
+    report = ReviewReport(
+        review_id=review_id,
+        reporter_user_id=user.id,
+        reason=payload.reason.lower().strip(),
+        details=payload.details.strip() if payload.details else "",
+        status="pending",
+    )
+    session.add(report)
+    session.commit()
+    session.refresh(report)
+    notify_admins(session, "review_reported", f"Review #{review_id} reported", f"Report reason: {report.reason}. Details: {report.details}", "/admin/reviews")
+    audit_event(session, user.id, "review.reported", "review", review_id, f"Reported by user #{user.id} for {report.reason}")
+    return {"ok": True, "report_id": report.id, "status": "pending"}
 
 
 @app.get("/api/traveler/profile")
@@ -2871,6 +3023,18 @@ def admin_reviews(
         tourist = session.get(User, r.tourist_user_id)
         local = session.get(LocalProfile, r.local_profile_id)
         moderation = session.exec(select(ReviewModeration).where(ReviewModeration.review_id == r.id)).first()
+        reports = session.exec(select(ReviewReport).where(ReviewReport.review_id == r.id).order_by(ReviewReport.created_at.desc())).all()
+        report_details = []
+        for rep in reports:
+            reporter = session.get(User, rep.reporter_user_id)
+            report_details.append({
+                "id": rep.id,
+                "reason": rep.reason,
+                "details": rep.details,
+                "status": rep.status,
+                "reporter_name": reporter.full_name if reporter else "User",
+                "created_at": rep.created_at,
+            })
         result.append(
             {
                 "id": r.id,
@@ -2882,6 +3046,8 @@ def admin_reviews(
                 "tourist_name": tourist.full_name if tourist else "Unknown traveler",
                 "booking_id": r.booking_id,
                 "moderation_status": moderation.status if moderation else "visible",
+                "report_count": len(reports),
+                "reports": report_details,
             }
         )
     return result
@@ -3040,8 +3206,16 @@ def admin_review_moderation(
     row.status = payload.status
     row.updated_at = datetime.now(timezone.utc)
     session.add(row); session.commit(); session.refresh(row)
-    audit_event(session, admin.id, "admin.review_moderation", "review", review_id, f"Moderation set to {row.status}")
-    return {"ok": True, "review_id": review_id, "status": row.status}
+    stats = recalculate_local_rating(session, review.local_profile_id)
+    audit_event(session, admin.id, "admin.review_moderation", "review", review_id, f"Moderation set to {row.status}; rating recalculated to {stats['rating']} ({stats['review_count']} reviews)")
+    return {
+        "ok": True,
+        "review_id": review_id,
+        "status": row.status,
+        "local_rating": stats["rating"],
+        "local_review_count": stats["review_count"],
+        "distribution": stats["distribution"],
+    }
 
 
 @app.get("/api/admin/settings")

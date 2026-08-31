@@ -474,3 +474,14 @@ class RequestOffer(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow, index=True)
     updated_at: datetime = Field(default_factory=utcnow)
 
+
+class ReviewReport(SQLModel, table=True):
+    """Abuse, fraud, or harassment report filed against a review."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    review_id: int = Field(foreign_key="review.id", index=True)
+    reporter_user_id: int = Field(foreign_key="user.id", index=True)
+    reason: str = Field(max_length=60)
+    details: str = Field(default="", max_length=1000)
+    status: str = Field(default="pending", index=True, max_length=30)
+    created_at: datetime = Field(default_factory=utcnow, index=True)
+
