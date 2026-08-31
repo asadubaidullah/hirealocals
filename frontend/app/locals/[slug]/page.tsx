@@ -102,6 +102,65 @@ export default async function LocalProfilePage({ params }: { params: Promise<{ s
   const d = await getLocal(slug);
   if (!d) notFound();
   const l = shape(d);
+  const totalReviews = l.reviews || 0;
+  const personEntity: Record<string, any> = {
+    "@type": "Person",
+    name: l.name,
+    description: l.headline,
+    image: l.image,
+    homeLocation: { "@type": "Place", name: l.city },
+    knowsLanguage: l.languages,
+  };
+
+  if (totalReviews > 0) {
+    personEntity.aggregateRating = {
+      "@type": "AggregateRating",
+      ratingValue: Number(l.rating.toFixed(2)),
+      reviewCount: totalReviews,
+      bestRating: "5",
+      worstRating: "1",
+    };
+  }
+
+  if (l.services && l.services.length > 0) {
+    personEntity.offers = l.services.map((s: any) => ({
+      "@type": "Offer",
+      name: s.title,
+      price: String(s.price),
+      priceCurrency: "USD",
+      description: s.description || "",
+      availability: "https://schema.org/InStock",
+    }));
+  } else if (l.rate > 0) {
+    personEntity.offers = [
+      {
+        "@type": "Offer",
+        name: `Hourly Experience with ${l.name}`,
+        price: String(l.rate),
+        priceCurrency: "USD",
+        availability: "https://schema.org/InStock",
+      },
+    ];
+  }
+
+  if (l.publicReviews && l.publicReviews.length > 0) {
+    personEntity.review = l.publicReviews.slice(0, 5).map((r: any) => ({
+      "@type": "Review",
+      reviewRating: {
+        "@type": "Rating",
+        ratingValue: r.rating,
+        bestRating: "5",
+        worstRating: "1",
+      },
+      author: {
+        "@type": "Person",
+        name: r.traveler_name || "Verified Traveler",
+      },
+      reviewBody: r.comment || "",
+      datePublished: r.created_at,
+    }));
+  }
+
   const schema = {
     "@context": "https://schema.org",
     "@graph": [
@@ -109,14 +168,7 @@ export default async function LocalProfilePage({ params }: { params: Promise<{ s
         "@type": "ProfilePage",
         name: `${l.name} — Local in ${l.city}`,
         url: `${siteUrl}/locals/${l.slug}`,
-        mainEntity: {
-          "@type": "Person",
-          name: l.name,
-          description: l.headline,
-          image: l.image,
-          homeLocation: { "@type": "Place", name: l.city },
-          knowsLanguage: l.languages,
-        },
+        mainEntity: personEntity,
       },
       {
         "@type": "BreadcrumbList",
@@ -128,8 +180,6 @@ export default async function LocalProfilePage({ params }: { params: Promise<{ s
       },
     ],
   };
-
-  const totalReviews = l.reviews || 0;
 
   return (
     <>

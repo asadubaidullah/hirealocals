@@ -36948,5 +36948,108 @@ html[data-theme="dark"] .admin-kyc-preview-frame{
 }
 /* POINT 6 — REVENUE ENGINE STYLES END */
 
+/* POINT 7 — SEO & MARKETPLACE DEMAND CAPTURE STYLES START */
+.country-page-hero,
+.category-page-hero {
+  padding: 48px 0 36px;
+  background: linear-gradient(180deg, var(--surface) 0%, rgba(255, 255, 255, 0) 100%);
+  border-bottom: 1px solid var(--line);
+}
+
+.country-page-hero h1,
+.category-page-hero h1 {
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.country-page-hero .lead,
+.category-page-hero .lead {
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--muted);
+  margin-top: 14px;
+}
+
+.country-cities-section,
+.country-locals-section,
+.country-categories-section,
+.country-insights-section,
+.country-guides-section,
+.category-destinations-section,
+.category-locals-section,
+.category-trust-section {
+  padding: 40px 0;
+}
+
+.country-insights-section .city-trust-card,
+.category-trust-section .city-trust-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+.country-insights-section .city-trust-card h3,
+.category-trust-section .city-trust-card h3 {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.country-insights-section .city-trust-card p,
+.category-trust-section .city-trust-card p {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 0;
+}
+
+.destination-country-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.destination-country-pills a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid var(--line);
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.destination-country-pills a:hover {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+@media (max-width: 768px) {
+  .country-page-hero,
+  .category-page-hero {
+    padding: 32px 0 24px;
+  }
+  .country-cities-section,
+  .country-locals-section,
+  .country-categories-section,
+  .country-insights-section,
+  .category-destinations-section,
+  .category-locals-section,
+  .category-trust-section {
+    padding: 28px 0;
+  }
+}
+/* POINT 7 — SEO & MARKETPLACE DEMAND CAPTURE STYLES END */
+
 
 

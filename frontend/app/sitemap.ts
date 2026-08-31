@@ -1,6 +1,6 @@
-﻿import type { MetadataRoute } from "next";
+import type { MetadataRoute } from "next";
 import { serverApiUrl, siteUrl } from "@/lib/site";
-import { getCities, getBlogPosts } from "@/lib/content";
+import { getCities, getBlogPosts, getServiceCategories } from "@/lib/content";
 
 export const dynamic="force-dynamic";
 
@@ -11,16 +11,35 @@ function dateOrUndefined(value?:string|null){
 }
 
 export default async function sitemap():Promise<MetadataRoute.Sitemap>{
-  const staticPaths=["","/explore","/destinations","/experiences","/how-it-works","/safety","/become-a-local","/about","/contact","/blog","/terms","/privacy"];
-  const [cities,posts,localRows]=await Promise.all([
+  const staticPaths=[
+    "",
+    "/explore",
+    "/destinations",
+    "/experiences",
+    "/uk",
+    "/usa",
+    "/how-it-works",
+    "/safety",
+    "/become-a-local",
+    "/about",
+    "/contact",
+    "/blog",
+    "/terms",
+    "/privacy"
+  ];
+  const [cities,posts,categories,localRows]=await Promise.all([
     getCities(),
     getBlogPosts(),
+    getServiceCategories(),
     fetch(`${serverApiUrl}/api/locals`,{cache:"no-store"}).then(r=>r.ok?r.json():[]).catch(()=>[])
   ]);
+
+  const activeCategories=categories.filter(c=>c.active!==false);
 
   const entries:MetadataRoute.Sitemap=[
     ...staticPaths.map(path=>({url:`${siteUrl}${path}`})),
     ...cities.map(city=>({url:`${siteUrl}/${city.country_slug}/${city.slug}`,lastModified:dateOrUndefined(city.updated_at)})),
+    ...activeCategories.map(cat=>({url:`${siteUrl}/experiences/${cat.slug}`})),
     ...localRows.filter((row:any)=>row?.profile?.slug).map((row:any)=>({url:`${siteUrl}/locals/${row.profile.slug}`,lastModified:dateOrUndefined(row.profile.updated_at)})),
     ...posts.map(post=>({url:`${siteUrl}/blog/${post.slug}`,lastModified:dateOrUndefined(post.updated_at||post.published_at)}))
   ];

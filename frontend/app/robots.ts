@@ -1,4 +1,4 @@
-﻿import type { MetadataRoute } from "next";
+import type { MetadataRoute } from "next";
 import { siteUrl } from "@/lib/site";
 
 export default function robots():MetadataRoute.Robots{
@@ -6,7 +6,13 @@ export default function robots():MetadataRoute.Robots{
     rules:{
       userAgent:"*",
       allow:"/",
-      disallow:["/admin/"]
+      disallow:[
+        "/admin/",
+        "/dashboard/",
+        "/local-dashboard/",
+        "/kyc/",
+        "/api/"
+      ]
     },
     sitemap:`${siteUrl}/sitemap.xml`,
     host:siteUrl

@@ -1,4 +1,4 @@
-﻿import { notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, MapPin, Sparkles } from "lucide-react";
@@ -105,14 +105,14 @@ export default async function CityPage({params}:{params:Promise<{country:string;
     {"@type":"CollectionPage",name:c.meta_title||`Hire a Local in ${c.name}`,description:c.meta_description||c.description,url:`${siteUrl}/${c.country_slug}/${c.slug}`},
     {"@type":"BreadcrumbList",itemListElement:[
       {"@type":"ListItem",position:1,name:"HireALocals",item:siteUrl},
-      {"@type":"ListItem",position:2,name:c.country_name,item:`${siteUrl}/explore`},
+      {"@type":"ListItem",position:2,name:c.country_name,item:`${siteUrl}/${c.country_slug}`},
       {"@type":"ListItem",position:3,name:c.name,item:`${siteUrl}/${c.country_slug}/${c.slug}`}
     ]}
   ]};
 
   return <>
     <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(schema)}}/>
-    <section className="page-hero city-page-hero"><div className="container"><span className="badge"><MapPin size={14}/>{c.country_name}</span><h1>Hire a local in {c.name}.</h1><p className="lead">{c.description}</p><div className="hero-actions"><Link className="btn" href={`/explore?city=${encodeURIComponent(c.name)}`}>Browse {c.name} locals <ArrowRight size={16}/></Link><Link className="btn secondary" href="/become-a-local">Become a {c.name} local</Link></div></div></section>
+    <section className="page-hero city-page-hero"><div className="container"><Link href={`/${c.country_slug}`} className="badge" style={{textDecoration:'none'}}><MapPin size={14}/>{c.country_name}</Link><h1>Hire a local in {c.name}.</h1><p className="lead">{c.description}</p><div className="hero-actions"><Link className="btn" href={`/explore?city=${encodeURIComponent(c.name)}`}>Browse {c.name} locals <ArrowRight size={16}/></Link><Link className="btn secondary" href="/become-a-local">Become a {c.name} local</Link></div></div></section>
     {c.image_url&&<section className="section-sm city-cover-section"><div className="container"><img className="city-cover-image" src={c.image_url} alt={`${c.name} city`}/></div></section>}
     <section className="section city-locals-section"><div className="container"><span className="eyebrow">Locals in {c.name}</span><h2>Choose a person, not just a package.</h2>{found.length?<div className="grid grid-3" style={{marginTop:26}}>{found.map((l:any)=><LocalCard key={l.id} local={l}/>)}</div>:<div className="empty">We are onboarding the first trusted locals in {c.name}. <Link href="/become-a-local" style={{color:'var(--green)',fontWeight:800}}>Apply to be one of them.</Link></div>}</div></section>
     {c.seo_content?<CityInsights text={c.seo_content} city={c.name}/>:null}

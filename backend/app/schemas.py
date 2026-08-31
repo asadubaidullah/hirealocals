@@ -336,3 +336,12 @@ class PromoUpdateInput(BaseModel):
 
 class ReferralClaimInput(BaseModel):
     code: str = Field(min_length=2, max_length=40)
+
+
+class DemandSummaryResponse(BaseModel):
+    period: str
+    total_searches: int
+    zero_result_searches: int
+    zero_result_rate: float
+    top_searched_cities: list[dict]
+    top_searched_categories: list[dict]

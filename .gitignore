@@ -105,3 +105,5 @@ frontend/**/*.zip
 *.db
 .agents/
 .specify/
+frontend/AGENTS.md
+frontend/CLAUDE.md

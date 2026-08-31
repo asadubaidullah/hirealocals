@@ -60,6 +60,7 @@ from .models import (
     PromoRedemption,
     ReferralCode,
     ReferralAttribution,
+    SearchEvent,
 )
 from .schemas import (
     RegisterInput,
@@ -100,6 +101,7 @@ from .schemas import (
     PromoCreateInput,
     PromoUpdateInput,
     ReferralClaimInput,
+    DemandSummaryResponse,
 )
 from .security import hash_password, verify_password, create_access_token, current_user, admin_user
 from .didit_kyc import router as didit_kyc_router
@@ -1070,6 +1072,7 @@ def local_kyc_approved(
 @app.get("/api/search/locals")
 def search_locals(
     session: Annotated[Session, Depends(get_session)],
+    request: Request,
     q: str = "",
     country: str = "",
     city: str = "",
@@ -1132,6 +1135,26 @@ def search_locals(
         rows.append({"profile": profile, "services": services})
 
     total = len(rows)
+
+    # Record search telemetry if any search terms or filters are active
+    if q.strip() or country or city or category:
+        try:
+            client_ip = request.client.host if request.client else ""
+            ip_hash = hashlib.sha256(client_ip.encode()).hexdigest()[:16] if client_ip else ""
+            event = SearchEvent(
+                query=q.strip()[:200],
+                country_code=country.upper()[:2],
+                city_name=city.strip()[:120],
+                category=category.strip()[:80],
+                results_count=total,
+                is_zero_result=(total == 0),
+                ip_hash=ip_hash,
+            )
+            session.add(event)
+            session.commit()
+        except Exception:
+            session.rollback()
+
     pages = max(1, (total + page_size - 1) // page_size)
     if page > pages:
         page = pages
@@ -3780,6 +3803,72 @@ def admin_revenue_summary(
             "paid": round(payout_paid, 2),
         },
         "currency": settings.payment_currency.upper(),
+    }
+
+
+@app.get("/api/admin/demand/summary", response_model=DemandSummaryResponse)
+def admin_demand_summary(
+    _: Annotated[User, Depends(admin_user)],
+    session: Annotated[Session, Depends(get_session)],
+    period: str = "all_time",
+):
+    now = datetime.now(timezone.utc)
+    cutoff = None
+    if period == "today":
+        cutoff = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
+    elif period == "7d":
+        cutoff = now - timedelta(days=7)
+    elif period == "30d":
+        cutoff = now - timedelta(days=30)
+
+    events = session.exec(select(SearchEvent).order_by(SearchEvent.created_at.desc())).all()
+    if cutoff:
+        filtered = []
+        for ev in events:
+            ev_time = ev.created_at
+            if ev_time.tzinfo is None:
+                ev_time = ev_time.replace(tzinfo=timezone.utc)
+            if ev_time >= cutoff:
+                filtered.append(ev)
+        events = filtered
+
+    total_searches = len(events)
+    zero_result_searches = sum(1 for e in events if e.is_zero_result)
+    zero_result_rate = round((zero_result_searches / total_searches * 100), 2) if total_searches > 0 else 0.0
+
+    city_counts: dict[str, dict] = {}
+    for e in events:
+        c_name = e.city_name.strip() or e.query.strip()
+        if c_name:
+            c_key = c_name.title()
+            if c_key not in city_counts:
+                city_counts[c_key] = {"city": c_key, "count": 0, "zero_results": 0}
+            city_counts[c_key]["count"] += 1
+            if e.is_zero_result:
+                city_counts[c_key]["zero_results"] += 1
+
+    top_cities = sorted(city_counts.values(), key=lambda x: x["count"], reverse=True)[:10]
+
+    cat_counts: dict[str, dict] = {}
+    for e in events:
+        cat = e.category.strip()
+        if cat:
+            cat_key = cat.title()
+            if cat_key not in cat_counts:
+                cat_counts[cat_key] = {"category": cat_key, "count": 0, "zero_results": 0}
+            cat_counts[cat_key]["count"] += 1
+            if e.is_zero_result:
+                cat_counts[cat_key]["zero_results"] += 1
+
+    top_categories = sorted(cat_counts.values(), key=lambda x: x["count"], reverse=True)[:10]
+
+    return {
+        "period": period,
+        "total_searches": total_searches,
+        "zero_result_searches": zero_result_searches,
+        "zero_result_rate": zero_result_rate,
+        "top_searched_cities": top_cities,
+        "top_searched_categories": top_categories,
     }
 
 

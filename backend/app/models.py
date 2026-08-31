@@ -541,3 +541,17 @@ class ReferralAttribution(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
     qualified_at: Optional[datetime] = Field(default=None)
 
+
+class SearchEvent(SQLModel, table=True):
+    """Telemetry record measuring marketplace search queries and unmet demand."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    query: str = Field(default="", index=True, max_length=200)
+    country_code: str = Field(default="", index=True, max_length=2)
+    city_name: str = Field(default="", index=True, max_length=120)
+    category: str = Field(default="", index=True, max_length=80)
+    results_count: int = Field(default=0, index=True)
+    is_zero_result: bool = Field(default=False, index=True)
+    user_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+    ip_hash: str = Field(default="", index=True, max_length=64)
+    created_at: datetime = Field(default_factory=utcnow, index=True)
+

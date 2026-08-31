@@ -1,4 +1,4 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import {
@@ -203,7 +203,7 @@ export default async function ExperiencesPage(){
            <div className="experience-card-grid">
               {categories.map(category=>
                 <Link
-                  href={`/explore?service=${encodeURIComponent(category.name)}`}
+                  href={`/experiences/${category.slug}`}
                   className="experience-service-card"
                   key={category.id}
                 >
