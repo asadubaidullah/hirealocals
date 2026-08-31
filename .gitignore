@@ -100,3 +100,8 @@ frontend/**/*.zip
 /frontend/backups/
 /frontend/_encoding_backup_*/
 /backend/_backup_before_*/
+
+# Local DB & Agent Specs
+*.db
+.agents/
+.specify/

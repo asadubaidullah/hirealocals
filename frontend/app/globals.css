@@ -36712,5 +36712,241 @@ html[data-theme="dark"] .admin-kyc-preview-frame{
 
 /* POINT 5 — REVIEWS & TRUST STYLES END */
 
+/* POINT 6 — REVENUE ENGINE STYLES START */
+.promo-section {
+  width: 100%;
+}
+
+.promo-toggle-btn {
+  background: transparent;
+  border: none;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.promo-toggle-btn:hover {
+  color: #1d4ed8;
+}
+
+.promo-box {
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.promo-status-msg.ok {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.promo-status-msg.err {
+  color: #dc2626;
+  font-weight: 500;
+}
+
+/* Traveler Referrals Hub */
+.traveler-referrals-view {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.referral-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.referral-kpi-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.kpi-icon-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+}
+
+.kpi-icon-wrap.reward-icon {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.kpi-icon-wrap.friends-icon {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.kpi-icon-wrap.pending-icon {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.kpi-label {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.kpi-value {
+  display: block;
+  font-size: 24px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-top: 2px;
+}
+
+.referral-share-card,
+.referral-claim-card,
+.referral-activity-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.referral-share-card h3,
+.referral-claim-card h3,
+.referral-activity-card h3 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.referral-link-bar {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.referral-url-input {
+  flex: 1;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: #334155;
+  font-family: monospace;
+}
+
+.btn-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  white-space: nowrap;
+}
+
+.referral-code-pill {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.referral-claim-form {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.referrals-table-wrap {
+  margin-top: 14px;
+  overflow-x: auto;
+}
+
+.referrals-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.referrals-table th,
+.referrals-table td {
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.referrals-table th {
+  background: #f8fafc;
+  color: #64748b;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.ref-badge-pending {
+  background: #fef3c7;
+  color: #92400e;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ref-badge-qualified {
+  background: #dcfce7;
+  color: #166534;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.empty-referrals-state {
+  text-align: center;
+  padding: 32px 16px;
+  color: #64748b;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Admin Revenue KPI Banner */
+.admin-revenue-kpi-banner {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.create-promo-panel {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+/* POINT 6 — REVENUE ENGINE STYLES END */
+
 
 

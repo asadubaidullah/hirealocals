@@ -125,7 +125,8 @@ def get_or_create_ledger(session: Session, booking: Booking) -> CommissionLedger
     row = session.exec(select(CommissionLedger).where(CommissionLedger.booking_id == booking.id)).first()
     if not row:
         row = CommissionLedger(booking_id=booking.id)
-    row.gross_amount = round(booking.subtotal + booking.platform_fee, 2)
+    discount = getattr(booking, "discount_amount", 0.0) or 0.0
+    row.gross_amount = round(booking.subtotal + booking.platform_fee - discount, 2)
     row.local_amount = round(booking.subtotal, 2)
     row.platform_fee = round(booking.platform_fee, 2)
     row.updated_at = utcnow()
@@ -413,10 +414,9 @@ def create_checkout(
         else None
     )
 
-    total_minor = money_minor(
-        booking.subtotal
-        + booking.platform_fee
-    )
+    discount = getattr(booking, "discount_amount", 0.0) or 0.0
+    payable_total = max(0.0, round(booking.subtotal + booking.platform_fee - discount, 2))
+    total_minor = money_minor(payable_total)
 
     fee_minor = money_minor(
         booking.platform_fee

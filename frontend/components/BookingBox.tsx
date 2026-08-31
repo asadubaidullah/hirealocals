@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useEffect,useMemo,useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -31,12 +31,30 @@ export default function BookingBox({local}:{local:any}){
   const [feePercent,setFeePercent]=useState(12);
   const [marketplaceMode,setMarketplaceMode]=useState("open");
   const [acceptPolicy,setAcceptPolicy]=useState(false);
+  const [showPromoBox,setShowPromoBox]=useState(false);
+  const [promoCodeInput,setPromoCodeInput]=useState("");
+  const [appliedPromo,setAppliedPromo]=useState<any>(null);
+  const [promoStatus,setPromoStatus]=useState("");
+  const [promoBusy,setPromoBusy]=useState(false);
 
   useEffect(()=>{
     const params=
       new URLSearchParams(
         window.location.search
       );
+
+    const rebookService=params.get("rebook_service_id");
+    if(rebookService){
+      const match=local.services?.find((s:any)=>String(s.id)===String(rebookService));
+      if(match?.id){
+        setServiceId(Number(match.id));
+      }
+    }
+
+    const rebookGuests=Number(params.get("rebook_guests")||params.get("guests")||"1");
+    if(Number.isFinite(rebookGuests)){
+      setGuests(Math.min(6,Math.max(1,Math.trunc(rebookGuests))));
+    }
 
     const requestedDate=
       params.get("date")||"";
@@ -48,29 +66,6 @@ export default function BookingBox({local}:{local:any}){
       requestedDate>=todayInput()
     ){
       setDate(requestedDate);
-    }
-
-    const requestedGuests=
-      Number(
-        params.get("guests")||"1"
-      );
-
-    if(
-      Number.isFinite(
-        requestedGuests
-      )
-    ){
-      setGuests(
-        Math.min(
-          6,
-          Math.max(
-            1,
-            Math.trunc(
-              requestedGuests
-            )
-          )
-        )
-      );
     }
 
     const requestedService=
@@ -134,6 +129,8 @@ export default function BookingBox({local}:{local:any}){
   const bookingHours=Number(selectedService?.duration||hours);
   const subtotal=Number(selectedService?.price??(local.rate*hours));
   const fee=Math.round(subtotal*(feePercent/100)*100)/100;
+  const discount=appliedPromo?Number(appliedPromo.discount_amount||0):0;
+  const estimatedTotal=Math.max(0,Math.round((subtotal+fee-discount)*100)/100);
 
   useEffect(()=>{
     if(!date){setSlots([]);setTime("");setSchedule(null);setSlotStatus("");return}
@@ -154,6 +151,38 @@ export default function BookingBox({local}:{local:any}){
     })();
     return()=>{cancelled=true};
   },[date,bookingHours,serviceId,local.id]);
+
+  async function applyPromo(){
+    if(!promoCodeInput.trim())return;
+    setPromoBusy(true);
+    setPromoStatus("Validating promo code...");
+    try{
+      const r=await fetch(`${apiUrl}/api/promotions/validate`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          code:promoCodeInput.trim(),
+          subtotal,
+          service_id:serviceId||null,
+        }),
+      });
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(d.detail||"Invalid promo code");
+      setAppliedPromo(d);
+      setPromoStatus(`✓ Code ${d.code} applied! -$${Number(d.discount_amount).toFixed(2)} off`);
+    }catch(err:any){
+      setAppliedPromo(null);
+      setPromoStatus(err.message||"Could not apply promo code");
+    }finally{
+      setPromoBusy(false);
+    }
+  }
+
+  function removePromo(){
+    setAppliedPromo(null);
+    setPromoCodeInput("");
+    setPromoStatus("");
+  }
 
   async function requestBooking(){
     if(!getToken()){
@@ -176,7 +205,8 @@ export default function BookingBox({local}:{local:any}){
     try{
       const r=await authedFetch('/api/bookings',{method:'POST',body:JSON.stringify({
         local_profile_id:local.id,service_id:serviceId||null,booking_date:date,start_time:time,guests,hours:bookingHours,message,
-        meeting_point_name:meetingPoint,meeting_address:meetingAddress,meeting_instructions:meetingInstructions,accept_booking_terms:acceptPolicy
+        meeting_point_name:meetingPoint,meeting_address:meetingAddress,meeting_instructions:meetingInstructions,accept_booking_terms:acceptPolicy,
+        promo_code:appliedPromo?appliedPromo.code:undefined,
       })});
       const data=await r.json().catch(()=>({}));
       if(!r.ok)throw new Error(data.detail||'Booking request failed');
@@ -214,7 +244,53 @@ export default function BookingBox({local}:{local:any}){
     <div className="form-group" style={{marginTop:10}}><label>Address <span className="muted">(optional)</span></label><input value={meetingAddress} onChange={e=>setMeetingAddress(e.target.value)} placeholder="Street address or landmark"/></div>
     <div className="form-group" style={{marginTop:10}}><label>Meeting instructions <span className="muted">(optional)</span></label><textarea value={meetingInstructions} onChange={e=>setMeetingInstructions(e.target.value)} rows={2} placeholder="Where exactly should you meet?"/></div>
     <div className="form-group" style={{marginTop:12}}><label>Message to local <span className="muted">(optional)</span></label><textarea value={message} onChange={e=>setMessage(e.target.value)} rows={3} placeholder="Tell the local what you want to explore"/></div>
-    <div className="divider"/><div style={{display:'flex',justifyContent:'space-between'}}><span>{selectedService?'Service price':'Local time'}</span><span>${subtotal.toFixed(2)}</span></div><div style={{display:'flex',justifyContent:'space-between',marginTop:8}}><span>Platform fee ({feePercent}%)</span><span>${fee.toFixed(2)}</span></div><div style={{display:'flex',justifyContent:'space-between',fontWeight:900,marginTop:14}}><span>Estimated total</span><span>${(subtotal+fee).toFixed(2)}</span></div>
+
+    {/* Promo Code Section */}
+    <div className="promo-section" style={{marginTop:14}}>
+      {!showPromoBox&&!appliedPromo?(
+        <button type="button" className="promo-toggle-btn" onClick={()=>setShowPromoBox(true)}>
+          + Have a promo code?
+        </button>
+      ):(
+        <div className="promo-box">
+          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            <input
+              type="text"
+              className="form-control"
+              placeholder="PROMO CODE"
+              value={promoCodeInput}
+              disabled={!!appliedPromo}
+              onChange={e=>setPromoCodeInput(e.target.value.toUpperCase())}
+              style={{textTransform:'uppercase',fontWeight:700,letterSpacing:'0.05em',fontSize:13}}
+            />
+            {appliedPromo?(
+              <button type="button" className="btn btn-outline" style={{padding:'6px 12px',fontSize:12}} onClick={removePromo}>
+                Remove
+              </button>
+            ):(
+              <button type="button" className="btn" style={{padding:'6px 14px',fontSize:12}} disabled={promoBusy||!promoCodeInput.trim()} onClick={applyPromo}>
+                {promoBusy?'...':'Apply'}
+              </button>
+            )}
+          </div>
+          {promoStatus&&<div className={`promo-status-msg ${appliedPromo?'ok':'err'}`} style={{fontSize:12,marginTop:6}}>{promoStatus}</div>}
+        </div>
+      )}
+    </div>
+
+    <div className="divider"/>
+    <div style={{display:'flex',justifyContent:'space-between'}}><span>{selectedService?'Service price':'Local time'}</span><span>${subtotal.toFixed(2)}</span></div>
+    <div style={{display:'flex',justifyContent:'space-between',marginTop:8}}><span>Platform fee ({feePercent}%)</span><span>${fee.toFixed(2)}</span></div>
+    {discount>0&&(
+      <div style={{display:'flex',justifyContent:'space-between',marginTop:8,color:'#16a34a',fontWeight:700}}>
+        <span>Promo discount ({appliedPromo?.code})</span>
+        <span>-${discount.toFixed(2)}</span>
+      </div>
+    )}
+    <div style={{display:'flex',justifyContent:'space-between',fontWeight:900,marginTop:14,fontSize:18}}>
+      <span>Estimated total</span>
+      <span>${estimatedTotal.toFixed(2)}</span>
+    </div>
     <label className="policy-check compact-policy"><input type="checkbox" checked={acceptPolicy} onChange={e=>setAcceptPolicy(e.target.checked)}/><span>I accept the <Link href="/terms" target="_blank">booking terms</Link>, including the published cancellation/refund rules.</span></label>
     <button type="button" className="btn" disabled={busy||!time||!acceptPolicy} onClick={requestBooking} style={{width:'100%',marginTop:16,opacity:(busy||!time||!acceptPolicy)?.65:1}}>{busy?'Sending...':'Request booking'}</button>
     {status&&<div className="notice" style={{marginTop:12}}>{status}</div>}

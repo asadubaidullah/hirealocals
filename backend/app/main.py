@@ -56,6 +56,10 @@ from .models import (
     TripRequest,
     RequestOffer,
     ReviewReport,
+    PromoCode,
+    PromoRedemption,
+    ReferralCode,
+    ReferralAttribution,
 )
 from .schemas import (
     RegisterInput,
@@ -92,6 +96,10 @@ from .schemas import (
     TripRequestInput,
     RequestOfferInput,
     ReviewReportInput,
+    PromoValidateInput,
+    PromoCreateInput,
+    PromoUpdateInput,
+    ReferralClaimInput,
 )
 from .security import hash_password, verify_password, create_access_token, current_user, admin_user
 from .didit_kyc import router as didit_kyc_router
@@ -321,9 +329,9 @@ def auth_token_row(session: Session, raw: str, kind: str) -> AuthToken:
 
 
 def _deliver_outbox_row(session: Session, row: EmailOutbox) -> None:
-    if not settings.smtp_host:
+    if not settings.smtp_host or settings.app_env != "production":
         row.status = "dev_queued"
-        row.last_error = "SMTP is not configured. View this message in Admin > Email outbox."
+        row.last_error = "Development mode: outbox recorded. View this message in Admin > Email outbox."
         session.add(row); session.commit()
         return
     try:
@@ -332,7 +340,7 @@ def _deliver_outbox_row(session: Session, row: EmailOutbox) -> None:
         msg["From"] = f"{settings.smtp_from_name} <{settings.smtp_from_email}>"
         msg["To"] = row.to_email
         msg.set_content(row.body_text)
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=2) as smtp:
             if settings.smtp_use_tls:
                 smtp.starttls()
             if settings.smtp_username:
@@ -401,6 +409,82 @@ def unique_local_slug(session: Session, name: str, city: str) -> str:
     return candidate
 
 
+def _ensure_utc_datetime(dt: datetime | None) -> datetime | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def calculate_booking_financials(
+    session: Session,
+    subtotal: float,
+    promo_code_str: str | None = None,
+    user_id: int | None = None,
+) -> dict:
+    """Authoritative server-side calculation for booking financial values."""
+    subtotal = round(float(subtotal), 2)
+    fee_setting = get_setting(session, "platform_fee_percent") or "12"
+    try:
+        fee_percent = float(fee_setting)
+    except Exception:
+        fee_percent = 12.0
+
+    platform_fee = round(subtotal * (fee_percent / 100.0), 2)
+    discount_amount = 0.0
+    applied_promo: PromoCode | None = None
+
+    if promo_code_str and promo_code_str.strip():
+        norm_code = promo_code_str.strip().upper()
+        promo = session.exec(select(PromoCode).where(PromoCode.code == norm_code)).first()
+        if promo and promo.is_active:
+            now = datetime.now(timezone.utc)
+            p_starts = _ensure_utc_datetime(promo.starts_at)
+            p_expires = _ensure_utc_datetime(promo.expires_at)
+            valid_time = (not p_starts or now >= p_starts) and (not p_expires or now <= p_expires)
+            valid_uses = not promo.max_uses_total or promo.current_uses < promo.max_uses_total
+            valid_min = subtotal >= promo.min_subtotal
+
+            user_ok = True
+            if user_id:
+                user_redemptions = session.exec(
+                    select(PromoRedemption).where(
+                        PromoRedemption.promo_code_id == promo.id,
+                        PromoRedemption.user_id == user_id,
+                    )
+                ).all()
+                if len(user_redemptions) >= promo.max_uses_per_user:
+                    user_ok = False
+
+            if valid_time and valid_uses and valid_min and user_ok:
+                if promo.discount_type == "percent":
+                    calc_disc = round(subtotal * (promo.discount_value / 100.0), 2)
+                    if promo.max_discount is not None:
+                        calc_disc = min(calc_disc, round(float(promo.max_discount), 2))
+                    discount_amount = calc_disc
+                else:
+                    discount_amount = min(round(float(promo.discount_value), 2), round(subtotal + platform_fee, 2))
+                applied_promo = promo
+
+    discount_amount = min(discount_amount, round(subtotal + platform_fee, 2))
+    traveler_total = max(0.0, round(subtotal + platform_fee - discount_amount, 2))
+    local_payable = round(subtotal, 2)
+    net_platform_revenue = round(platform_fee - discount_amount, 2)
+
+    return {
+        "subtotal": subtotal,
+        "platform_fee": platform_fee,
+        "discount_amount": discount_amount,
+        "total": traveler_total,
+        "local_payable": local_payable,
+        "net_platform_revenue": net_platform_revenue,
+        "promo_code_id": applied_promo.id if applied_promo else None,
+        "promo_code": applied_promo.code if applied_promo else "",
+        "applied_promo": applied_promo,
+    }
+
+
 def sync_commission_ledger(session: Session) -> list[CommissionLedger]:
     bookings = session.exec(select(Booking).order_by(Booking.created_at.desc())).all()
     rows = []
@@ -408,7 +492,8 @@ def sync_commission_ledger(session: Session) -> list[CommissionLedger]:
         row = session.exec(select(CommissionLedger).where(CommissionLedger.booking_id == booking.id)).first()
         if not row:
             row = CommissionLedger(booking_id=booking.id)
-        row.gross_amount = round(booking.subtotal + booking.platform_fee, 2)
+        disc = getattr(booking, "discount_amount", 0.0) or 0.0
+        row.gross_amount = round(booking.subtotal + booking.platform_fee - disc, 2)
         row.local_amount = round(booking.subtotal, 2)
         row.platform_fee = round(booking.platform_fee, 2)
         if booking.status in {"cancelled", "rejected"} and row.payout_status != "paid":
@@ -1224,9 +1309,8 @@ def create_booking(
     booking_hours = float(service.duration_hours if service else payload.hours)
     validate_booking_slot(session, local.id, payload.booking_date, payload.start_time, booking_hours)
 
-    subtotal = round((service.price if service else local.hourly_rate * booking_hours), 2)
-    fee_percent = float(get_setting(session, "platform_fee_percent") or "12")
-    platform_fee = round(subtotal * (fee_percent / 100), 2)
+    raw_subtotal = round((service.price if service else local.hourly_rate * booking_hours), 2)
+    fin = calculate_booking_financials(session, raw_subtotal, getattr(payload, "promo_code", None), user.id)
     booking = Booking(
         tourist_user_id=user.id,
         local_profile_id=local.id,
@@ -1236,10 +1320,28 @@ def create_booking(
         guests=payload.guests,
         hours=booking_hours,
         message=payload.message.strip(),
-        subtotal=subtotal,
-        platform_fee=platform_fee,
+        subtotal=fin["subtotal"],
+        platform_fee=fin["platform_fee"],
+        discount_amount=fin["discount_amount"],
+        promo_code=fin["promo_code"],
     )
     session.add(booking)
+    session.flush()
+
+    if fin["promo_code_id"] and fin["discount_amount"] > 0:
+        redemption = PromoRedemption(
+            promo_code_id=fin["promo_code_id"],
+            user_id=user.id,
+            booking_id=booking.id,
+            discount_amount=fin["discount_amount"],
+        )
+        session.add(redemption)
+        promo_row = session.get(PromoCode, fin["promo_code_id"])
+        if promo_row:
+            promo_row.current_uses += 1
+            session.add(promo_row)
+        audit_event(session, user.id, "promo.redeemed", "booking", booking.id, f"Promo code {fin['promo_code']} applied for ${fin['discount_amount']:.2f} discount", request)
+
     session.commit()
     session.refresh(booking)
 
@@ -2162,6 +2264,64 @@ def get_local_reviews(
     }
 
 
+def process_qualifying_referral_reward(session: Session, booking: Booking) -> None:
+    """Awards referral credit strictly when referee's first booking is completed and paid."""
+    if settings.payment_required and not payment_is_paid(session, booking.id):
+        return
+
+    attribution = session.exec(
+        select(ReferralAttribution).where(
+            ReferralAttribution.referee_user_id == booking.tourist_user_id,
+            ReferralAttribution.status == "pending",
+        )
+    ).first()
+
+    if not attribution:
+        return
+
+    # Check if referee already had a previous completed booking
+    prev_completed = session.exec(
+        select(Booking).where(
+            Booking.tourist_user_id == booking.tourist_user_id,
+            Booking.id != booking.id,
+            Booking.status == "completed",
+        )
+    ).all()
+    if prev_completed:
+        return
+
+    attribution.status = "qualified"
+    attribution.qualifying_booking_id = booking.id
+    attribution.qualified_at = datetime.now(timezone.utc)
+    session.add(attribution)
+
+    ref_code = session.get(ReferralCode, attribution.referral_code_id)
+    if ref_code:
+        ref_code.total_referred_count += 1
+        ref_code.total_credits_earned = round(ref_code.total_credits_earned + attribution.reward_amount, 2)
+        session.add(ref_code)
+
+    session.commit()
+
+    audit_event(
+        session,
+        attribution.referrer_user_id,
+        "referral.reward_unlocked",
+        "referral_attribution",
+        attribution.id,
+        f"Referral reward of ${attribution.reward_amount:.2f} unlocked via referee booking #{booking.id}",
+    )
+    add_notification(
+        session,
+        attribution.referrer_user_id,
+        "referral_reward",
+        "Referral Reward Unlocked! 🎉",
+        f"Your friend completed their first experience! You've earned ${attribution.reward_amount:.2f} in travel credits.",
+        "/dashboard/referrals",
+        email=True,
+    )
+
+
 @app.patch("/api/local/bookings/{booking_id}")
 def local_booking_status(
     booking_id: int,
@@ -2192,6 +2352,8 @@ def local_booking_status(
     log_booking_event(session, booking, user.id, "status_changed", old_status, payload.status, f"Local changed booking to {payload.status}")
     session.commit()
     session.refresh(booking)
+    if payload.status == "completed":
+        process_qualifying_referral_reward(session, booking)
     add_notification(session, booking.tourist_user_id, "booking_status", f"Booking #{booking.id} is {booking.status}", f"Your booking for {booking.booking_date} at {booking.start_time} was marked {booking.status}.", f"/dashboard/bookings/{booking.id}", email=True)
     session.refresh(booking)
     return booking
@@ -2378,6 +2540,27 @@ def get_or_create_traveler_profile(user: User, session: Session) -> TravelerProf
     return profile
 
 
+def get_or_create_referral_code(session: Session, user: User) -> ReferralCode:
+    ref = session.exec(select(ReferralCode).where(ReferralCode.user_id == user.id)).first()
+    if not ref:
+        base_name = re.sub(r"[^A-Z0-9]+", "", (user.full_name or "TRAVEL").upper())[:6] or "TRAVEL"
+        suffix = secrets.token_hex(2).upper()
+        code = f"REF-{base_name}-{suffix}"
+        while session.exec(select(ReferralCode).where(ReferralCode.code == code)).first():
+            suffix = secrets.token_hex(2).upper()
+            code = f"REF-{base_name}-{suffix}"
+        ref = ReferralCode(
+            user_id=user.id,
+            code=code,
+            reward_credit=15.0,
+            referee_discount=10.0,
+        )
+        session.add(ref)
+        session.commit()
+        session.refresh(ref)
+    return ref
+
+
 def traveler_booking_row(booking: Booking, session: Session) -> dict:
     local = session.get(LocalProfile, booking.local_profile_id)
     service = session.get(Service, booking.service_id) if booking.service_id else None
@@ -2394,11 +2577,14 @@ def traveler_booking_row(booking: Booking, session: Session) -> dict:
         ).all()
     )
     review = session.exec(select(Review).where(Review.booking_id == booking.id)).first()
+    disc = getattr(booking, "discount_amount", 0.0) or 0.0
+    promo = getattr(booking, "promo_code", "") or ""
     return {
         "id": booking.id, "booking_date": booking.booking_date, "start_time": booking.start_time,
         "end_time": booking_end_time(booking), "guests": booking.guests, "hours": booking.hours,
         "message": booking.message, "subtotal": booking.subtotal, "platform_fee": booking.platform_fee,
-        "total": round(booking.subtotal + booking.platform_fee, 2), "status": booking.status,
+        "discount_amount": disc, "promo_code": promo,
+        "total": round(booking.subtotal + booking.platform_fee - disc, 2), "status": booking.status,
         "created_at": booking.created_at, "local_profile_id": booking.local_profile_id,
         "local_name": local.display_name if local else "Unknown local", "local_slug": local.slug if local else "",
         "local_headline": local.headline if local else "", "local_city": local.city_name if local else "",
@@ -2411,6 +2597,82 @@ def traveler_booking_row(booking: Booking, session: Session) -> dict:
             "id": review.id, "rating": review.rating, "title": review.title,
             "comment": review.comment, "created_at": review.created_at,
         },
+    }
+
+
+@app.get("/api/traveler/referrals")
+def traveler_referrals(
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    require_traveler(user)
+    ref_code = get_or_create_referral_code(session, user)
+    attributions = session.exec(
+        select(ReferralAttribution)
+        .where(ReferralAttribution.referrer_user_id == user.id)
+        .order_by(ReferralAttribution.created_at.desc())
+    ).all()
+
+    att_list = []
+    for att in attributions:
+        referee = session.get(User, att.referee_user_id)
+        att_list.append({
+            "id": att.id,
+            "referee_name": referee.full_name if referee else "Invited Traveler",
+            "status": att.status,
+            "reward_amount": att.reward_amount,
+            "created_at": att.created_at,
+            "qualified_at": att.qualified_at,
+        })
+
+    return {
+        "code": ref_code.code,
+        "reward_credit": ref_code.reward_credit,
+        "referee_discount": ref_code.referee_discount,
+        "total_referred_count": ref_code.total_referred_count,
+        "total_credits_earned": ref_code.total_credits_earned,
+        "invite_url": f"{settings.frontend_url.rstrip('/')}/register?ref={ref_code.code}",
+        "attributions": att_list,
+    }
+
+
+@app.post("/api/referrals/claim")
+def claim_referral_code(
+    payload: ReferralClaimInput,
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[Session, Depends(get_session)],
+    request: Request,
+):
+    norm_code = payload.code.strip().upper()
+    ref_code = session.exec(select(ReferralCode).where(ReferralCode.code == norm_code)).first()
+    if not ref_code:
+        raise HTTPException(404, "Invalid referral code")
+
+    if ref_code.user_id == user.id:
+        raise HTTPException(400, "Self-referrals are not permitted")
+
+    existing_att = session.exec(
+        select(ReferralAttribution).where(ReferralAttribution.referee_user_id == user.id)
+    ).first()
+    if existing_att:
+        raise HTTPException(409, "You have already claimed a referral code")
+
+    attribution = ReferralAttribution(
+        referrer_user_id=ref_code.user_id,
+        referee_user_id=user.id,
+        referral_code_id=ref_code.id,
+        status="pending",
+        reward_amount=ref_code.reward_credit,
+    )
+    session.add(attribution)
+    session.commit()
+    session.refresh(attribution)
+    audit_event(session, user.id, "referral.claimed", "referral_attribution", attribution.id, f"Claimed referral code {ref_code.code} from user #{ref_code.user_id}", request)
+    return {
+        "ok": True,
+        "code": ref_code.code,
+        "referee_discount": ref_code.referee_discount,
+        "message": f"Referral code {ref_code.code} applied! Enjoy ${ref_code.referee_discount:.2f} off your first booking.",
     }
 
 
@@ -3132,8 +3394,10 @@ def admin_booking_detail(
         },
         "service": None if not service else {"id": service.id, "title": service.title, "category": service.category, "price": service.price},
         "economics": {
-            "local_amount": round(booking.subtotal, 2), "platform_fee": round(booking.platform_fee, 2),
-            "customer_total": round(booking.subtotal + booking.platform_fee, 2),
+            "local_amount": round(booking.subtotal, 2),
+            "platform_fee": round(booking.platform_fee, 2),
+            "discount_amount": round(getattr(booking, "discount_amount", 0.0) or 0.0, 2),
+            "customer_total": round(booking.subtotal + booking.platform_fee - (getattr(booking, "discount_amount", 0.0) or 0.0), 2),
         },
         "messages": msg_rows,
         "meeting_point": meeting_point_dict(session, booking.id),
@@ -3258,6 +3522,265 @@ def admin_settings_update(
     session.commit()
     audit_event(session, admin.id, "admin.settings_update", "site_settings", "global", f"Marketplace mode={payload.marketplace_mode}; fee={payload.platform_fee_percent}%")
     return {"ok": True, **data}
+
+
+# ------------------------- Promotions & Coupons -------------------------
+
+
+@app.post("/api/promotions/validate")
+def validate_promo_code(
+    payload: PromoValidateInput,
+    session: Annotated[Session, Depends(get_session)],
+    user: Annotated[User | None, Depends(current_user)] = None,
+):
+    norm_code = payload.code.strip().upper()
+    promo = session.exec(select(PromoCode).where(PromoCode.code == norm_code)).first()
+    if not promo:
+        raise HTTPException(404, "Promo code not found")
+    if not promo.is_active:
+        raise HTTPException(400, "This promo code is no longer active")
+    now = datetime.now(timezone.utc)
+    p_starts = _ensure_utc_datetime(promo.starts_at)
+    p_expires = _ensure_utc_datetime(promo.expires_at)
+    if p_starts and now < p_starts:
+        raise HTTPException(400, "This promo code has not started yet")
+    if p_expires and now > p_expires:
+        raise HTTPException(400, "This promo code has expired")
+    if promo.max_uses_total and promo.current_uses >= promo.max_uses_total:
+        raise HTTPException(400, "Promo code usage limit has been reached")
+    if payload.subtotal < promo.min_subtotal:
+        raise HTTPException(400, f"Minimum booking subtotal of ${promo.min_subtotal:.2f} is required for this code")
+    if user:
+        user_uses = session.exec(
+            select(PromoRedemption).where(
+                PromoRedemption.promo_code_id == promo.id,
+                PromoRedemption.user_id == user.id,
+            )
+        ).all()
+        if len(user_uses) >= promo.max_uses_per_user:
+            raise HTTPException(400, "You have already reached the maximum usage limit for this promo code")
+
+    subtotal = round(payload.subtotal, 2)
+    fee_setting = get_setting(session, "platform_fee_percent") or "12"
+    try:
+        fee_percent = float(fee_setting)
+    except Exception:
+        fee_percent = 12.0
+    platform_fee = round(subtotal * (fee_percent / 100.0), 2)
+
+    if promo.discount_type == "percent":
+        discount = round(subtotal * (promo.discount_value / 100.0), 2)
+        if promo.max_discount is not None:
+            discount = min(discount, round(float(promo.max_discount), 2))
+    else:
+        discount = min(round(float(promo.discount_value), 2), round(subtotal + platform_fee, 2))
+
+    discount = min(discount, round(subtotal + platform_fee, 2))
+    estimated_total = max(0.0, round(subtotal + platform_fee - discount, 2))
+
+    return {
+        "valid": True,
+        "code": promo.code,
+        "description": promo.description,
+        "discount_type": promo.discount_type,
+        "discount_value": promo.discount_value,
+        "discount_amount": discount,
+        "subtotal": subtotal,
+        "platform_fee": platform_fee,
+        "estimated_total": estimated_total,
+    }
+
+
+@app.get("/api/admin/promotions")
+def admin_promotions(
+    _: Annotated[User, Depends(admin_user)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    promos = session.exec(select(PromoCode).order_by(PromoCode.created_at.desc())).all()
+    result = []
+    for promo in promos:
+        redemptions = session.exec(select(PromoRedemption).where(PromoRedemption.promo_code_id == promo.id)).all()
+        total_discount_spent = sum(r.discount_amount for r in redemptions)
+        result.append({
+            "id": promo.id,
+            "code": promo.code,
+            "description": promo.description,
+            "discount_type": promo.discount_type,
+            "discount_value": promo.discount_value,
+            "max_discount": promo.max_discount,
+            "min_subtotal": promo.min_subtotal,
+            "max_uses_total": promo.max_uses_total,
+            "max_uses_per_user": promo.max_uses_per_user,
+            "current_uses": promo.current_uses,
+            "is_active": promo.is_active,
+            "starts_at": promo.starts_at,
+            "expires_at": promo.expires_at,
+            "created_at": promo.created_at,
+            "total_redemptions_count": len(redemptions),
+            "total_discount_spent": round(total_discount_spent, 2),
+        })
+    return result
+
+
+@app.post("/api/admin/promotions")
+def admin_create_promotion(
+    payload: PromoCreateInput,
+    admin: Annotated[User, Depends(admin_user)],
+    session: Annotated[Session, Depends(get_session)],
+    request: Request,
+):
+    code_upper = payload.code.strip().upper()
+    existing = session.exec(select(PromoCode).where(PromoCode.code == code_upper)).first()
+    if existing:
+        raise HTTPException(409, "A promo code with this code already exists")
+
+    starts_at = None
+    if payload.starts_at:
+        try:
+            starts_at = datetime.fromisoformat(payload.starts_at.replace("Z", "+00:00"))
+        except Exception:
+            pass
+
+    expires_at = None
+    if payload.expires_at:
+        try:
+            expires_at = datetime.fromisoformat(payload.expires_at.replace("Z", "+00:00"))
+        except Exception:
+            pass
+
+    promo = PromoCode(
+        code=code_upper,
+        description=payload.description.strip(),
+        discount_type=payload.discount_type,
+        discount_value=round(payload.discount_value, 2),
+        max_discount=round(payload.max_discount, 2) if payload.max_discount is not None else None,
+        min_subtotal=round(payload.min_subtotal, 2),
+        max_uses_total=payload.max_uses_total,
+        max_uses_per_user=payload.max_uses_per_user,
+        starts_at=starts_at,
+        expires_at=expires_at,
+        is_active=payload.is_active,
+    )
+    session.add(promo)
+    session.commit()
+    session.refresh(promo)
+    audit_event(session, admin.id, "admin.promo_created", "promocode", promo.id, f"Created promo {promo.code} ({promo.discount_type} {promo.discount_value})", request)
+    return promo
+
+
+@app.patch("/api/admin/promotions/{promo_id}")
+def admin_update_promotion(
+    promo_id: int,
+    payload: PromoUpdateInput,
+    admin: Annotated[User, Depends(admin_user)],
+    session: Annotated[Session, Depends(get_session)],
+    request: Request,
+):
+    promo = session.get(PromoCode, promo_id)
+    if not promo:
+        raise HTTPException(404, "Promo code not found")
+
+    if payload.description is not None:
+        promo.description = payload.description.strip()
+    if payload.is_active is not None:
+        promo.is_active = payload.is_active
+    if payload.max_uses_total is not None:
+        promo.max_uses_total = payload.max_uses_total
+    if payload.max_uses_per_user is not None:
+        promo.max_uses_per_user = payload.max_uses_per_user
+    if payload.min_subtotal is not None:
+        promo.min_subtotal = round(payload.min_subtotal, 2)
+    if payload.expires_at is not None:
+        if payload.expires_at == "":
+            promo.expires_at = None
+        else:
+            try:
+                promo.expires_at = datetime.fromisoformat(payload.expires_at.replace("Z", "+00:00"))
+            except Exception:
+                pass
+
+    promo.updated_at = datetime.now(timezone.utc)
+    session.add(promo)
+    session.commit()
+    session.refresh(promo)
+    audit_event(session, admin.id, "admin.promo_updated", "promocode", promo.id, f"Updated promo {promo.code}; active={promo.is_active}", request)
+    return promo
+
+
+@app.get("/api/admin/revenue/summary")
+def admin_revenue_summary(
+    _: Annotated[User, Depends(admin_user)],
+    session: Annotated[Session, Depends(get_session)],
+    period: str = "all_time",
+):
+    now = datetime.now(timezone.utc)
+    cutoff = None
+    if period == "today":
+        cutoff = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
+    elif period == "7d":
+        cutoff = now - timedelta(days=7)
+    elif period == "30d":
+        cutoff = now - timedelta(days=30)
+
+    bookings = session.exec(select(Booking).order_by(Booking.created_at.desc())).all()
+    payments = session.exec(select(PaymentRecord)).all()
+    paid_booking_ids = {p.booking_id for p in payments if p.status == "paid"}
+
+    filtered_bookings = []
+    for b in bookings:
+        if b.id not in paid_booking_ids or b.status == "cancelled":
+            continue
+        if cutoff:
+            b_time = b.created_at
+            if b_time.tzinfo is None:
+                b_time = b_time.replace(tzinfo=timezone.utc)
+            if b_time < cutoff:
+                continue
+        filtered_bookings.append(b)
+
+    total_subtotal = sum(b.subtotal for b in filtered_bookings)
+    total_platform_fee = sum(b.platform_fee for b in filtered_bookings)
+    total_discount_spent = sum(getattr(b, "discount_amount", 0.0) or 0.0 for b in filtered_bookings)
+    gbv = sum(b.subtotal + b.platform_fee - (getattr(b, "discount_amount", 0.0) or 0.0) for b in filtered_bookings)
+    net_platform_revenue = total_platform_fee - total_discount_spent
+    take_rate_pct = round((net_platform_revenue / total_subtotal * 100), 2) if total_subtotal > 0 else 12.0
+
+    refunded_records = [p for p in payments if p.status == "refunded"]
+    if cutoff:
+        filtered_refunds = []
+        for p in refunded_records:
+            p_time = p.refunded_at or p.updated_at
+            if p_time.tzinfo is None:
+                p_time = p_time.replace(tzinfo=timezone.utc)
+            if p_time >= cutoff:
+                filtered_refunds.append(p)
+        refunded_records = filtered_refunds
+    total_refund_volume = sum((p.refunded_minor / 100.0) for p in refunded_records)
+
+    sync_commission_ledger(session)
+    ledger_entries = session.exec(select(CommissionLedger)).all()
+    payout_held = sum(l.local_amount for l in ledger_entries if l.payout_status == "held")
+    payout_unpaid = sum(l.local_amount for l in ledger_entries if l.payout_status == "unpaid")
+    payout_paid = sum(l.local_amount for l in ledger_entries if l.payout_status == "paid")
+
+    return {
+        "period": period,
+        "gbv": round(gbv, 2),
+        "total_local_payable": round(total_subtotal, 2),
+        "total_platform_fee": round(total_platform_fee, 2),
+        "total_discount_spent": round(total_discount_spent, 2),
+        "net_platform_revenue": round(net_platform_revenue, 2),
+        "effective_take_rate": round(take_rate_pct, 2),
+        "paid_bookings_count": len(filtered_bookings),
+        "total_refund_volume": round(total_refund_volume, 2),
+        "refund_count": len(refunded_records),
+        "payouts": {
+            "held": round(payout_held, 2),
+            "unpaid": round(payout_unpaid, 2),
+            "paid": round(payout_paid, 2),
+        },
+        "currency": settings.payment_currency.upper(),
+    }
 
 
 @app.get("/api/admin/audit")
@@ -4297,7 +4820,7 @@ def create_custom_request(
                 f"New opportunity in {trip_req.city_name}",
                 f"{user.full_name} is looking for a local on {trip_req.booking_date} ({trip_req.category}). Submit a quote to win this trip!",
                 "/local-dashboard/opportunities",
-                email=True,
+                email=False,
             )
 
     audit_event(
@@ -4595,13 +5118,7 @@ def accept_request_offer(
             )
 
     # 3. Create standard Booking
-    subtotal = round(offer.offered_price, 2)
-    fee_setting = get_setting(session, "platform_fee_percent") or "12"
-    try:
-        fee_percent = float(fee_setting)
-    except Exception:
-        fee_percent = 12.0
-    platform_fee = round(subtotal * (fee_percent / 100.0), 2)
+    fin = calculate_booking_financials(session, offer.offered_price, None, user.id)
 
     booking = Booking(
         tourist_user_id=trip_req.tourist_user_id,
@@ -4612,8 +5129,10 @@ def accept_request_offer(
         guests=trip_req.guests,
         hours=offer.duration_hours,
         message=f"Custom Request: {trip_req.title or trip_req.category}\n\nTraveler Requirements:\n{trip_req.description}\n\nAccepted Local Proposal:\n{offer.proposal_message}",
-        subtotal=subtotal,
-        platform_fee=platform_fee,
+        subtotal=fin["subtotal"],
+        platform_fee=fin["platform_fee"],
+        discount_amount=fin["discount_amount"],
+        promo_code=fin["promo_code"],
         status="confirmed",
     )
     session.add(booking)
@@ -4655,7 +5174,7 @@ def accept_request_offer(
             local.user_id,
             "offer_accepted",
             f"Quote accepted! New Booking #{booking.id}",
-            f"{user.full_name} accepted your quote for {booking.booking_date} (${subtotal:.2f}).",
+            f"{user.full_name} accepted your quote for {booking.booking_date} (${booking.subtotal:.2f}).",
             "/local-dashboard/bookings",
             email=True,
         )

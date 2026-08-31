@@ -96,6 +96,11 @@ const groups: NavGroup[] = [
         icon: CircleDollarSign,
       },
       {
+        href: "/admin/promotions",
+        label: "Promotions",
+        icon: Tags,
+      },
+      {
         href: "/admin/reviews",
         label: "Reviews",
         icon: Star,

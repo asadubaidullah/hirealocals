@@ -60,6 +60,11 @@ const links = [
     icon: Star,
   },
   {
+    label: "Referrals & Rewards",
+    href: "/dashboard/referrals",
+    icon: Sparkles,
+  },
+  {
     label: "Profile",
     href: "/dashboard/profile",
     icon: UserRound,

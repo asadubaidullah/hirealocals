@@ -47,6 +47,7 @@ class BookingInput(BaseModel):
     meeting_address: str = Field(default="", max_length=500)
     meeting_instructions: str = Field(default="", max_length=1000)
     accept_booking_terms: bool = False
+    promo_code: Optional[str] = Field(default="", max_length=40)
 
 
 class ProviderApplicationInput(BaseModel):
@@ -302,3 +303,36 @@ class RequestOfferInput(BaseModel):
 class ReviewReportInput(BaseModel):
     reason: str = Field(min_length=2, max_length=60)
     details: Optional[str] = Field(default="", max_length=1000)
+
+
+class PromoValidateInput(BaseModel):
+    code: str = Field(min_length=2, max_length=40)
+    subtotal: float = Field(gt=0.0)
+    service_id: Optional[int] = None
+
+
+class PromoCreateInput(BaseModel):
+    code: str = Field(min_length=2, max_length=40)
+    description: str = Field(default="", max_length=255)
+    discount_type: str = Field(default="percent", pattern="^(percent|fixed)$")
+    discount_value: float = Field(gt=0.0)
+    max_discount: Optional[float] = Field(default=None, ge=0.0)
+    min_subtotal: float = Field(default=0.0, ge=0.0)
+    max_uses_total: Optional[int] = Field(default=None, ge=1)
+    max_uses_per_user: int = Field(default=1, ge=1)
+    starts_at: Optional[str] = None
+    expires_at: Optional[str] = None
+    is_active: bool = True
+
+
+class PromoUpdateInput(BaseModel):
+    description: Optional[str] = Field(default=None, max_length=255)
+    is_active: Optional[bool] = None
+    max_uses_total: Optional[int] = Field(default=None, ge=1)
+    max_uses_per_user: Optional[int] = Field(default=None, ge=1)
+    min_subtotal: Optional[float] = Field(default=None, ge=0.0)
+    expires_at: Optional[str] = None
+
+
+class ReferralClaimInput(BaseModel):
+    code: str = Field(min_length=2, max_length=40)

@@ -61,6 +61,8 @@ class Booking(SQLModel, table=True):
     message: str = ""
     subtotal: float = 0.0
     platform_fee: float = 0.0
+    discount_amount: float = 0.0
+    promo_code: str = ""
     status: str = Field(default="pending", index=True, max_length=30)
     created_at: datetime = Field(default_factory=utcnow)
 
@@ -484,4 +486,58 @@ class ReviewReport(SQLModel, table=True):
     details: str = Field(default="", max_length=1000)
     status: str = Field(default="pending", index=True, max_length=30)
     created_at: datetime = Field(default_factory=utcnow, index=True)
+
+
+class PromoCode(SQLModel, table=True):
+    """Marketplace promotional code with discount type, limits, and expiration."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    code: str = Field(index=True, unique=True, max_length=40)
+    description: str = Field(default="", max_length=255)
+    discount_type: str = Field(default="percent", max_length=20)  # "percent" or "fixed"
+    discount_value: float = Field(ge=0.0)  # e.g. 10.0 for 10% or $15.00
+    max_discount: Optional[float] = Field(default=None)  # Cap for percentage discounts
+    min_subtotal: float = Field(default=0.0, ge=0.0)
+    max_uses_total: Optional[int] = Field(default=None)
+    max_uses_per_user: int = Field(default=1)
+    current_uses: int = Field(default=0)
+    is_active: bool = Field(default=True, index=True)
+    starts_at: Optional[datetime] = Field(default=None)
+    expires_at: Optional[datetime] = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class PromoRedemption(SQLModel, table=True):
+    """Record of an individual promo code redemption on a booking."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    promo_code_id: int = Field(foreign_key="promocode.id", index=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    booking_id: int = Field(foreign_key="booking.id", unique=True, index=True)
+    discount_amount: float = Field(ge=0.0)
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class ReferralCode(SQLModel, table=True):
+    """Unique traveler referral invite code."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", unique=True, index=True)
+    code: str = Field(unique=True, index=True, max_length=40)
+    reward_credit: float = Field(default=15.0)
+    referee_discount: float = Field(default=10.0)
+    total_referred_count: int = Field(default=0)
+    total_credits_earned: float = Field(default=0.0)
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class ReferralAttribution(SQLModel, table=True):
+    """Attribution linkage between a referrer and a newly onboarded referee."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    referrer_user_id: int = Field(foreign_key="user.id", index=True)
+    referee_user_id: int = Field(foreign_key="user.id", unique=True, index=True)
+    referral_code_id: int = Field(foreign_key="referralcode.id")
+    status: str = Field(default="pending", index=True, max_length=30)  # "pending", "qualified", "rewarded", "void"
+    qualifying_booking_id: Optional[int] = Field(default=None, foreign_key="booking.id")
+    reward_amount: float = Field(default=15.0)
+    created_at: datetime = Field(default_factory=utcnow)
+    qualified_at: Optional[datetime] = Field(default=None)
 
