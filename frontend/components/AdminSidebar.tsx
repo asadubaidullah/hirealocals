@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
@@ -28,17 +29,28 @@ import {
   Users,
 } from "lucide-react";
 
+import { authedFetch } from "@/lib/api";
 import { clearSession } from "@/lib/auth";
 
 type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
+  badgeKey?: "locals" | "requests" | "reviews" | "support" | "notifications";
 };
 
 type NavGroup = {
   label: string;
   items: NavItem[];
+};
+
+type BadgeCounts = {
+  total: number;
+  locals: number;
+  requests: number;
+  reviews: number;
+  support: number;
+  notifications: number;
 };
 
 type Props = {
@@ -72,8 +84,9 @@ const groups: NavGroup[] = [
       },
       {
         href: "/admin/locals",
-        label: "Locals",
+        label: "Locals & KYC",
         icon: UserRoundCheck,
+        badgeKey: "locals",
       },
     ],
   },
@@ -90,6 +103,7 @@ const groups: NavGroup[] = [
         href: "/admin/requests",
         label: "Custom Requests",
         icon: Sparkles,
+        badgeKey: "requests",
       },
       {
         href: "/admin/payments",
@@ -110,11 +124,13 @@ const groups: NavGroup[] = [
         href: "/admin/reviews",
         label: "Reviews",
         icon: Star,
+        badgeKey: "reviews",
       },
       {
         href: "/admin/support",
         label: "Support",
         icon: LifeBuoy,
+        badgeKey: "support",
       },
     ],
   },
@@ -126,6 +142,7 @@ const groups: NavGroup[] = [
         href: "/admin/notifications",
         label: "Notifications",
         icon: Bell,
+        badgeKey: "notifications",
       },
       {
         href: "/admin/email-outbox",
@@ -197,6 +214,79 @@ export default function AdminSidebar({ onNavigate }: Props) {
   const pathname = usePathname();
   const router = useRouter();
 
+  const [badges, setBadges] = useState<BadgeCounts>({
+    total: 0,
+    locals: 0,
+    requests: 0,
+    reviews: 0,
+    support: 0,
+    notifications: 0,
+  });
+
+  async function fetchBadges() {
+    try {
+      const res = await authedFetch("/api/admin/activity-badges");
+      if (res.ok) {
+        const data = await res.json();
+        setBadges(data);
+        window.dispatchEvent(
+          new CustomEvent("hal-admin-badges-synced", { detail: data })
+        );
+      }
+    } catch {}
+  }
+
+  useEffect(() => {
+    fetchBadges();
+
+    const interval = setInterval(fetchBadges, 30000);
+    const onFocus = () => fetchBadges();
+    const onRefresh = () => fetchBadges();
+
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("hal-admin-badges-refresh", onRefresh);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("hal-admin-badges-refresh", onRefresh);
+    };
+  }, []);
+
+  // When admin navigates to a section, automatically clear its unread badge
+  useEffect(() => {
+    let categoryToClear = "";
+    if (pathname.startsWith("/admin/locals")) categoryToClear = "locals";
+    else if (pathname.startsWith("/admin/requests")) categoryToClear = "requests";
+    else if (pathname.startsWith("/admin/reviews")) categoryToClear = "reviews";
+    else if (pathname.startsWith("/admin/support")) categoryToClear = "support";
+    else if (pathname.startsWith("/admin/notifications")) categoryToClear = "notifications";
+
+    if (categoryToClear) {
+      authedFetch("/api/admin/activity-badges/clear", {
+        method: "POST",
+        body: JSON.stringify({ category: categoryToClear }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((updated) => {
+          if (updated) {
+            setBadges({
+              total: updated.total,
+              locals: updated.locals,
+              requests: updated.requests,
+              reviews: updated.reviews,
+              support: updated.support,
+              notifications: updated.notifications,
+            });
+            window.dispatchEvent(
+              new CustomEvent("hal-admin-badges-synced", { detail: updated })
+            );
+          }
+        })
+        .catch(() => {});
+    }
+  }, [pathname]);
+
   function isActive(href: string) {
     if (href === "/admin") return pathname === "/admin";
 
@@ -214,7 +304,6 @@ export default function AdminSidebar({ onNavigate }: Props) {
 
   return (
     <div className="admin-v2-sidebar-inner">
-
       <div className="admin-v2-brand">
         <img
           src="/icon.svg"
@@ -247,6 +336,7 @@ export default function AdminSidebar({ onNavigate }: Props) {
             {group.items.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
+              const count = item.badgeKey ? badges[item.badgeKey] || 0 : 0;
 
               return (
                 <Link
@@ -263,6 +353,15 @@ export default function AdminSidebar({ onNavigate }: Props) {
                   <Icon size={17} strokeWidth={1.9} />
 
                   <span>{item.label}</span>
+
+                  {count > 0 ? (
+                    <span
+                      className="admin-v2-nav-badge"
+                      aria-label={`${count} unread notifications for ${item.label}`}
+                    >
+                      {count}
+                    </span>
+                  ) : null}
                 </Link>
               );
             })}
@@ -280,9 +379,6 @@ export default function AdminSidebar({ onNavigate }: Props) {
           <span>Log out</span>
         </button>
       </div>
-
     </div>
   );
 }
-
-

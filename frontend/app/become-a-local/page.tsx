@@ -1,335 +1,364 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import Link from "next/link";
-
 import {
   ArrowRight,
   BadgeCheck,
-  CalendarDays,
+  Calendar,
   CheckCircle2,
-  Clock3,
-  Heart,
+  Clock,
+  DollarSign,
+  HeartHandshake,
+  HelpCircle,
   MapPin,
+  MessageCircle,
   ShieldCheck,
   Sparkles,
+  Star,
   Users,
-  WalletCards,
+  Wallet
 } from "lucide-react";
 
 import ProviderForm from "@/components/ProviderForm";
 
 export const metadata: Metadata = {
-  title: "Become a Local",
+  title: "Become a Local Host | Turn Local Knowledge into Income | HireALocals",
   description:
-    "Apply to become a HireALocals Local and offer private experiences and practical local help to travelers across selected UK and US cities.",
+    "Apply to become a verified HireALocals host. Offer private walking tours, food tastings, photography, and city orientation to travelers in top UK and US cities.",
   alternates: {
     canonical: "/become-a-local",
+  },
+  openGraph: {
+    title: "Become a Local Host | HireALocals",
+    description:
+      "Join our community of verified local hosts. Share your city, set your own hourly rates, and host flexible private experiences.",
+    url: "https://hirealocals.com/become-a-local",
+    siteName: "HireALocals",
   },
 };
 
 const benefits = [
   {
-    icon: Heart,
-    title: "Share what you know",
-    text:
-      "Turn your knowledge of your city, neighbourhoods, culture and everyday life into useful experiences for travelers.",
+    icon: DollarSign,
+    title: "Earn on your own terms",
+    text: "Set your own hourly rate and create custom experience packages. Keep the majority of every booking with transparent platform fees.",
   },
   {
-    icon: CalendarDays,
-    title: "Work on your terms",
-    text:
-      "Choose the services you want to offer and manage your availability from your Local workspace.",
+    icon: Calendar,
+    title: "Total schedule flexibility",
+    text: "You decide when you host. Open specific days, block calendar dates, and set times that seamlessly fit around your lifestyle.",
   },
   {
     icon: Users,
-    title: "Meet travelers personally",
-    text:
-      "Offer private, flexible help instead of forcing every traveler into the same generic package.",
+    title: "100% private experiences",
+    text: "Host individual travelers, couples, or small private groups. No chaotic 40-person tour buses or rigid corporate scripts.",
+  },
+  {
+    icon: MessageCircle,
+    title: "Direct traveler communication",
+    text: "Chat with travelers through in-platform messaging before confirming any booking to align on start times, meeting spots, and interests.",
+  },
+  {
+    icon: Wallet,
+    title: "Guaranteed payment protection",
+    text: "Traveler payments are pre-funded and held securely in platform escrow before you meet. Payouts are tracked transparently in your workspace.",
+  },
+  {
+    icon: Star,
+    title: "Build your local reputation",
+    text: "Collect verified 5-star traveler reviews that build your personal profile visibility and unlock higher earnings over time.",
   },
 ];
 
-const steps = [
+const roadmapSteps = [
   {
-    number: "1",
-    title: "Apply",
-    text:
-      "Tell us who you are, where you are based, the languages you speak and the services you can offer.",
+    number: "01",
+    title: "Submit your application",
+    description:
+      "Fill out our simple application form with your location, languages spoken, and the types of experiences you want to offer.",
   },
   {
-    number: "2",
-    title: "Application review",
-    text:
-      "HireALocals reviews your application before a Local account and public profile can go live.",
+    number: "02",
+    title: "Quick verification review",
+    description:
+      "Our team reviews your application to ensure community quality and safety standards before activating your Local account.",
   },
   {
-    number: "3",
-    title: "Complete your Local profile",
-    text:
-      "Add your profile details, services, pricing, availability and any verification information that is required.",
+    number: "03",
+    title: "Build your profile & services",
+    description:
+      "Access your Local workspace to set your hourly rate, publish custom walking experiences, and set your weekly availability calendar.",
   },
   {
-    number: "4",
-    title: "Start receiving requests",
-    text:
-      "Once ready, travelers can discover your profile and send booking requests for your services.",
+    number: "04",
+    title: "Host travelers & get paid",
+    description:
+      "Receive direct booking requests and custom traveler proposals, meet up in your city, and receive secure payouts.",
   },
 ];
 
-export default function Page() {
+const hostFaqs = [
+  {
+    q: "Do I need a commercial tour license to become a local host?",
+    a: "You do not need to be a commercial tour operator to share your personal city knowledge, neighborhood walks, food discoveries, or photography experiences. However, hosts must comply with all local municipal guidelines and regulations in their respective cities.",
+  },
+  {
+    q: "How much can I charge as a Local?",
+    a: "You have complete freedom to set your hourly rate and custom service package pricing. Most verified hosts charge between $30 to $80+ per hour depending on their expertise, language skills, and experience specialization.",
+  },
+  {
+    q: "How do payouts work?",
+    a: "When a traveler books with you, their payment is pre-authorized and held safely in platform escrow. After your booking is completed, your earnings are credited directly to your Local account balance with transparent ledger tracking.",
+  },
+  {
+    q: "What languages and services are most in demand?",
+    a: "Travelers look for a wide range of help: neighborhood cultural walks, authentic food tastings, street photography, and first-day transit orientation. Multilingual hosts (English, Spanish, French, German, Japanese, etc.) are in especially high demand.",
+  },
+];
+
+export default function BecomeALocalPage() {
   return (
     <>
-      <section className="bal-hero">
-        <div className="container bal-hero-grid">
+      {/* HERO SECTION */}
+      <section className="bal-hero-v2">
+        <div className="container">
+          <div className="bal-hero-v2-grid">
+            <div className="bal-hero-v2-copy">
+              <span className="eyebrow">
+                <Sparkles size={14} />
+                Local Partner Program
+              </span>
 
-          <div className="bal-hero-copy">
-            <span className="eyebrow">Become a Local</span>
+              <h1>
+                Turn your city knowledge into <span>flexible income</span>.
+              </h1>
 
-            <h1>
-              Share your world.
-              <br />
-              <span>Inspire</span> every traveler.
-            </h1>
+              <p className="lead">
+                Join HireALocals to host private walking tours, food walks, street photography, and neighborhood orientation for travelers visiting your city.
+              </p>
 
-            <p>
-              Use your local knowledge to help travelers experience a city
-              in a more personal way. Choose what you offer, shape your
-              availability and build a trusted Local profile.
-            </p>
+              <div className="bal-hero-v2-actions">
+                <a href="#apply" className="btn">
+                  Apply to become a Local <ArrowRight size={17} />
+                </a>
+                <a href="#how-it-works" className="btn secondary">
+                  How it works
+                </a>
+              </div>
 
-            <div className="bal-hero-actions">
-              <Link href="#apply" className="btn">
-                Apply to become a Local
-                <ArrowRight size={17}/>
-              </Link>
-
-              <Link href="#how-it-works" className="btn secondary">
-                How it works
-              </Link>
+              <div className="bal-hero-v2-proof">
+                <div className="bal-proof-pill">
+                  <CheckCircle2 size={16} />
+                  <span>Set your own rates</span>
+                </div>
+                <div className="bal-proof-pill">
+                  <CheckCircle2 size={16} />
+                  <span>Flexible schedule</span>
+                </div>
+                <div className="bal-proof-pill">
+                  <CheckCircle2 size={16} />
+                  <span>Secure escrow payouts</span>
+                </div>
+              </div>
             </div>
 
-            <div className="bal-proof-row">
-              <span>
-                <ShieldCheck size={17}/>
-                Application review
-              </span>
-
-              <span>
-                <CalendarDays size={17}/>
-                Flexible availability
-              </span>
-
-              <span>
-                <Sparkles size={17}/>
-                Your own services
-              </span>
-            </div>
-          </div>
-
-
-          <div className="bal-hero-visual">
-            <img
-              src="/images/become-a-local/hero-guide-pexels.jpg"
-              alt="Local guide speaking with visiting travelers"
-            />
-
-            <div className="bal-hero-float">
-              <span className="bal-hero-float-icon">
-                <MapPin size={20}/>
-              </span>
-
-              <div>
-                <strong>Local knowledge matters.</strong>
-                <span>
-                  Help travelers experience more than the usual checklist.
-                </span>
+            <div className="bal-hero-v2-visual">
+              <div className="bal-visual-wrapper">
+                <picture>
+                  <source
+                    type="image/webp"
+                    srcSet="/images/become-a-local/hero-guide-pexels-mobile.webp 750w, /images/become-a-local/hero-guide-pexels.webp 1600w"
+                    sizes="(max-width: 768px) 100vw, 50vw"
+                  />
+                  <img
+                    src="/images/become-a-local/hero-guide-pexels.jpg"
+                    alt="HireALocals host sharing authentic city stories with visitors"
+                    fetchPriority="high"
+                    decoding="async"
+                    width={600}
+                    height={400}
+                  />
+                </picture>
+                <div className="bal-floating-badge">
+                  <BadgeCheck size={22} className="badge-icon" />
+                  <div>
+                    <strong>Verified Local Community</strong>
+                    <span>Real residents. Real connections.</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-
         </div>
       </section>
 
-
-      <section className="bal-section">
+      {/* WHY HOST WITH US */}
+      <section className="section bal-benefits-section" id="benefits">
         <div className="container">
-
           <div className="bal-section-head">
-            <span className="eyebrow">Why become a Local?</span>
-            <h2>Turn local knowledge into something useful.</h2>
-          </div>
-
-          <div className="bal-benefit-grid">
-            {benefits.map(({icon:Icon,title,text}) => (
-              <article className="bal-benefit-card" key={title}>
-                <span className="bal-icon">
-                  <Icon size={22}/>
-                </span>
-
-                <h3>{title}</h3>
-                <p>{text}</p>
-              </article>
-            ))}
-          </div>
-
-        </div>
-      </section>
-
-
-      <section className="bal-section bal-earn-section">
-        <div className="container bal-earn-grid">
-
-          <div>
-            <span className="eyebrow">Build your offering</span>
-            <h2>Choose what you do best.</h2>
-
+            <span className="eyebrow">Host Advantages</span>
+            <h2>Why host private experiences on HireALocals?</h2>
             <p className="lead">
-              A HireALocals profile can be built around the kind of help
-              you genuinely know how to provide.
+              We provide the tools, traveler reach, and payment security so you can focus on showing off the city you love.
             </p>
-
-            <div className="bal-check-list">
-              <span>
-                <CheckCircle2 size={17}/>
-                Private local and city experiences
-              </span>
-
-              <span>
-                <CheckCircle2 size={17}/>
-                Food, photography or language help
-              </span>
-
-              <span>
-                <CheckCircle2 size={17}/>
-                Trip planning and practical local support
-              </span>
-
-              <span>
-                <CheckCircle2 size={17}/>
-                Your own service details and availability
-              </span>
-            </div>
           </div>
 
-
-          <div className="bal-earn-card">
-            <span className="bal-icon large">
-              <WalletCards size={28}/>
-            </span>
-
-            <span className="eyebrow">Transparent marketplace</span>
-
-            <h3>Your services. Your profile.</h3>
-
-            <p>
-              Set up the services and pricing that make sense for what
-              you offer. Confirmed booking and earnings information is
-              available from your Local workspace.
-            </p>
-
-            <div className="bal-mini-facts">
-              <span>
-                <Clock3 size={16}/>
-                Manage availability
-              </span>
-
-              <span>
-                <BadgeCheck size={16}/>
-                Build a trusted profile
-              </span>
-            </div>
+          <div className="bal-benefits-grid">
+            {benefits.map((b) => {
+              const Icon = b.icon;
+              return (
+                <article className="bal-benefit-card" key={b.title}>
+                  <div className="bal-benefit-icon">
+                    <Icon size={24} />
+                  </div>
+                  <h3>{b.title}</h3>
+                  <p>{b.text}</p>
+                </article>
+              );
+            })}
           </div>
-
         </div>
       </section>
 
-
-      <section
-        className="bal-section bal-how-section"
-        id="how-it-works"
-      >
+      {/* HOW IT WORKS ROADMAP */}
+      <section className="section bal-how-section" id="how-it-works">
         <div className="container">
-
           <div className="bal-section-head">
-            <span className="eyebrow">How to get started</span>
-            <h2>From application to your first request.</h2>
+            <span className="eyebrow">Onboarding Roadmap</span>
+            <h2>From application to your first booking.</h2>
+            <p className="lead">
+              A simple, transparent 4-step path to start earning as a verified local host.
+            </p>
           </div>
 
-          <div className="bal-step-grid">
-            {steps.map(step => (
-              <article className="bal-step" key={step.number}>
-                <span className="bal-step-number">
-                  {step.number}
-                </span>
-
-                <div>
-                  <h3>{step.title}</h3>
-                  <p>{step.text}</p>
-                </div>
-              </article>
+          <div className="bal-roadmap-grid">
+            {roadmapSteps.map((step) => (
+              <div className="bal-roadmap-card" key={step.number}>
+                <div className="bal-roadmap-num">{step.number}</div>
+                <h3>{step.title}</h3>
+                <p>{step.description}</p>
+              </div>
             ))}
           </div>
-
         </div>
       </section>
 
+      {/* TRUST & SAFETY FOR HOSTS */}
+      <section className="section bal-trust-section">
+        <div className="container">
+          <div className="bal-trust-card">
+            <div className="bal-trust-copy">
+              <span className="eyebrow">Platform Protection</span>
+              <h2>Your safety and peace of mind come first.</h2>
+              <p>
+                HireALocals is built with built-in safeguards to ensure safe, transparent, and mutually respectful connections between travelers and hosts.
+              </p>
+            </div>
 
-      <section className="bal-trust-strip">
-        <div className="container bal-trust-grid">
+            <div className="bal-trust-features">
+              <div className="bal-trust-feature">
+                <ShieldCheck size={20} />
+                <div>
+                  <strong>Pre-Funded Bookings</strong>
+                  <span>Every traveler pre-pays before you meet; no awkward cash handoffs.</span>
+                </div>
+              </div>
 
-          <div>
-            <strong>Trusted marketplace. Real people.</strong>
-            <span>
-              We review Local applications before profiles can go live.
-            </span>
-          </div>
+              <div className="bal-trust-feature">
+                <Users size={20} />
+                <div>
+                  <strong>Traveler Account Reviews</strong>
+                  <span>Direct communication and profile details before accepting requests.</span>
+                </div>
+              </div>
 
-          <span>
-            <ShieldCheck size={20}/>
-            Profile review
-          </span>
+              <div className="bal-trust-feature">
+                <HeartHandshake size={20} />
+                <div>
+                  <strong>Mutual Feedback System</strong>
+                  <span>Both travelers and hosts leave verified reviews after every completed experience.</span>
+                </div>
+              </div>
 
-          <span>
-            <BadgeCheck size={20}/>
-            Verification where required
-          </span>
-
-          <span>
-            <Sparkles size={20}/>
-            Quality-focused profiles
-          </span>
-
-        </div>
-      </section>
-
-
-      <section className="bal-apply-section" id="apply">
-        <div className="container bal-apply-grid">
-
-          <div className="bal-apply-copy">
-            <span className="eyebrow">Your application</span>
-
-            <h2>Tell us about your city and what you can offer.</h2>
-
-            <p>
-              Start with the essentials. If your application is approved,
-              you can then complete your Local profile, services and
-              availability from your workspace.
-            </p>
-
-            <div className="notice">
-              Applications are reviewed before a Local profile is
-              published.
+              <div className="bal-trust-feature">
+                <BadgeCheck size={20} />
+                <div>
+                  <strong>Dedicated Platform Support</strong>
+                  <span>Our support team is on standby to assist with booking questions and scheduling.</span>
+                </div>
+              </div>
             </div>
           </div>
+        </div>
+      </section>
 
-          <div className="bal-form-shell">
-            <ProviderForm/>
+      {/* APPLICATION SECTION WITH FORM */}
+      <section className="section bal-application-section" id="apply">
+        <div className="container">
+          <div className="bal-apply-layout">
+            <div className="bal-apply-sidebar">
+              <span className="eyebrow">Apply Today</span>
+              <h2>Ready to share your city with the world?</h2>
+              <p className="lead">
+                Submit your application below. We review all applications to maintain high trust and quality across our marketplace.
+              </p>
+
+              <div className="bal-sidebar-perks">
+                <div className="bal-sidebar-perk">
+                  <CheckCircle2 size={18} />
+                  <span>Free to apply — no upfront subscription or listing fees</span>
+                </div>
+                <div className="bal-sidebar-perk">
+                  <CheckCircle2 size={18} />
+                  <span>Direct control over your pricing and schedule</span>
+                </div>
+                <div className="bal-sidebar-perk">
+                  <CheckCircle2 size={18} />
+                  <span>Full access to your personal Local workspace dashboard</span>
+                </div>
+                <div className="bal-sidebar-perk">
+                  <CheckCircle2 size={18} />
+                  <span>Opportunity to receive custom traveler requests</span>
+                </div>
+              </div>
+
+              <div className="bal-sidebar-faq">
+                <h4>Questions before applying?</h4>
+                <p>
+                  Check out our <Link href="/how-it-works">How It Works</Link> page or read our <Link href="/safety">Trust & Safety Guidelines</Link>.
+                </p>
+              </div>
+            </div>
+
+            <div className="bal-apply-form-wrapper">
+              <ProviderForm />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* HOST FAQS */}
+      <section className="section bal-faq-section">
+        <div className="container">
+          <div className="bal-section-head">
+            <span className="eyebrow">Host FAQs</span>
+            <h2>Frequently asked questions from prospective hosts.</h2>
+            <p className="lead">
+              Common questions about hosting, setting rates, and getting verified.
+            </p>
           </div>
 
+          <div className="bal-faq-grid">
+            {hostFaqs.map((faq, idx) => (
+              <details className="bal-faq-item" key={idx} open={idx === 0}>
+                <summary className="bal-faq-question">
+                  <span>{faq.q}</span>
+                </summary>
+                <p className="bal-faq-answer">{faq.a}</p>
+              </details>
+            ))}
+          </div>
         </div>
       </section>
     </>
   );
 }
-
-
-

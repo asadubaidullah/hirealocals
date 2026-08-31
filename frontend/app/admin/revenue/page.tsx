@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   TrendingUp,
@@ -106,32 +105,18 @@ type ReferralRevenueItem = {
   generated_booking_value: number;
 };
 
-type PaymentLifecycleStats = {
-  total_payment_attempts: number;
-  paid_count: number;
-  processing_count: number;
-  failed_count: number;
-  refunded_count: number;
-  success_rate_pct: number;
-  failure_rate_pct: number;
-  refund_rate_pct: number;
-};
-
 type PayoutAgingBucket = {
   bucket_label: string;
-  amount: number;
   count: number;
-  local_count: number;
+  total_amount: number;
 };
 
-type PayoutAgingBreakdown = {
-  total_unpaid_liability: number;
-  unpaid_count: number;
-  total_scheduled_liability: number;
-  scheduled_count: number;
-  total_held_liability: number;
-  held_count: number;
-  buckets: PayoutAgingBucket[];
+type ReconciliationSummary = {
+  matched_count: number;
+  discrepancy_count: number;
+  pending_capture_count: number;
+  refunded_count: number;
+  total_discrepancy_amount: number;
 };
 
 type RevenueAnalyticsResponse = {
@@ -142,60 +127,56 @@ type RevenueAnalyticsResponse = {
   by_local: LocalRevenueItem[];
   by_promo: PromoRevenueItem[];
   by_referral: ReferralRevenueItem[];
-  payment_stats: PaymentLifecycleStats;
-  payout_aging: PayoutAgingBreakdown;
+  aging_buckets: PayoutAgingBucket[];
+  reconciliation_summary: ReconciliationSummary;
 };
 
-type ReconciliationRow = {
+type ReconciliationAuditRow = {
   booking_id: number;
   booking_status: string;
-  traveler_name: string;
-  local_name: string;
   booking_total: number;
   payment_status: string;
   safepay_tracker: string;
   charged_amount: number;
-  commission_gross: number;
   local_payable: number;
   platform_fee: number;
   payout_status: string;
-  reconciliation_status: string;
+  reconciliation_status: "MATCHED" | "DISCREPANCY" | "PENDING_CAPTURE" | "REFUNDED";
   discrepancy_note: string;
+  traveler_name: string;
+  local_name: string;
+  created_at: string;
 };
 
 type SettlementLedgerItem = {
   id: number;
   booking_id: number;
-  gross_amount: number;
+  local_profile_id: number;
+  total_booking_amount: number;
+  platform_commission_pct: number;
+  platform_commission_amount: number;
   local_amount: number;
-  platform_fee: number;
-  payout_status: string;
-  notes: string;
+  payout_status: "held" | "unpaid" | "scheduled" | "paid" | "cancelled";
+  notes?: string;
+  created_at: string;
   updated_at: string;
-  booking_status: string;
-  local_name: string;
-  tourist_name: string;
 };
 
-export default function RevenueCommandCenterPage() {
-  const [period, setPeriod] = useState("30d");
+export default function RevenuePage() {
+  const [period, setPeriod] = useState<string>("all_time");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
-  const [activeTab, setActiveTab] = useState<
-    "overview" | "trends" | "destinations" | "categories" | "locals" | "marketing" | "reconciliation" | "payouts" | "exports"
-  >("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "destinations" | "categories" | "locals" | "marketing" | "reconciliation" | "settlements">("overview");
 
   const [analytics, setAnalytics] = useState<RevenueAnalyticsResponse | null>(null);
-  const [reconciliationRows, setReconciliationRows] = useState<ReconciliationRow[]>([]);
+  const [reconciliationRows, setReconciliationRows] = useState<ReconciliationAuditRow[]>([]);
   const [settlements, setSettlements] = useState<SettlementLedgerItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionStatus, setActionStatus] = useState("");
 
-  // Reconciliation filter
-  const [reconFilter, setReconFilter] = useState("all");
+  const [reconFilter, setReconFilter] = useState<string>("all");
   const [reconSearch, setReconSearch] = useState("");
 
-  // Batch Payout selection
   const [selectedLedgerIds, setSelectedLedgerIds] = useState<number[]>([]);
   const [batchTargetStatus, setBatchTargetStatus] = useState<"scheduled" | "paid">("scheduled");
   const [batchNote, setBatchNote] = useState("");
@@ -304,837 +285,714 @@ export default function RevenueCommandCenterPage() {
       eyebrow="Financial Operations"
       title="Revenue Command Center"
     >
-      {/* Top Controls & Time Range Selector */}
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mr-2 flex items-center gap-1.5">
-            <Calendar className="w-3.5 h-3.5 text-emerald-400" /> Time Horizon:
-          </span>
-          {[
-            { id: "today", label: "Today" },
-            { id: "7d", label: "7 Days" },
-            { id: "30d", label: "30 Days" },
-            { id: "90d", label: "90 Days" },
-            { id: "mtd", label: "MTD" },
-            { id: "qtd", label: "QTD" },
-            { id: "all_time", label: "All Time" },
-            { id: "custom", label: "Custom" },
-          ].map((btn) => (
+      <div className="rev-cc-container">
+        {/* Top Controls & Time Horizon */}
+        <div className="rev-cc-horizon-bar">
+          <div className="rev-cc-horizon-pills">
+            <span className="rev-cc-horizon-label">
+              <Calendar size={13} /> Horizon:
+            </span>
+            {[
+              { id: "today", label: "Today" },
+              { id: "7d", label: "7 Days" },
+              { id: "30d", label: "30 Days" },
+              { id: "90d", label: "90 Days" },
+              { id: "mtd", label: "MTD" },
+              { id: "qtd", label: "QTD" },
+              { id: "all_time", label: "All Time" },
+              { id: "custom", label: "Custom" },
+            ].map((btn) => (
+              <button
+                key={btn.id}
+                type="button"
+                onClick={() => setPeriod(btn.id)}
+                className={
+                  period === btn.id
+                    ? "rev-cc-pill active"
+                    : "rev-cc-pill"
+                }
+              >
+                {btn.label}
+              </button>
+            ))}
+          </div>
+
+          {period === "custom" && (
+            <div className="rev-cc-custom-dates">
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+              />
+              <span>to</span>
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={loadData}
+                className="rev-cc-export-btn"
+              >
+                <RefreshCw size={13} /> Apply
+              </button>
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: "8px" }}>
             <button
-              key={btn.id}
-              onClick={() => setPeriod(btn.id)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                period === btn.id
-                  ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
-                  : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-              }`}
+              type="button"
+              onClick={() => handleExport("summary")}
+              className="rev-cc-export-btn"
             >
-              {btn.label}
+              <Download size={13} /> Export CSV
             </button>
-          ))}
+          </div>
         </div>
 
-        {period === "custom" && (
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5"
-            />
-            <span className="text-slate-400 text-xs">to</span>
-            <input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5"
-            />
-            <button
-              onClick={loadData}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-lg flex items-center gap-1"
-            >
-              <RefreshCw className="w-3 h-3" /> Apply
-            </button>
+        {actionStatus && (
+          <div className="notice mb-0">
+            <CheckCircle2 size={16} />
+            <span>{actionStatus}</span>
           </div>
         )}
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => handleExport("summary")}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg flex items-center gap-1.5 border border-slate-700"
-          >
-            <Download className="w-3.5 h-3.5 text-emerald-400" /> Export CSV
-          </button>
-        </div>
-      </div>
+        {/* Executive KPI Grid */}
+        <div className="rev-cc-kpi-grid">
+          <div className="rev-cc-kpi-card">
+            <div className="rev-cc-kpi-head">
+              <span className="rev-cc-kpi-title">Gross Booking Value</span>
+              <span className="rev-cc-kpi-icon"><DollarSign size={16} /></span>
+            </div>
+            <div className="rev-cc-kpi-value">
+              ${kpis ? kpis.gbv.toLocaleString(undefined, { minimumFractionDigits: 2 }) : "0.00"}
+            </div>
+            <div className="rev-cc-kpi-foot">
+              {kpis && kpis.gbv_delta_pct >= 0 ? (
+                <span className="rev-cc-delta-up">
+                  <ArrowUpRight size={13} /> +{kpis.gbv_delta_pct}%
+                </span>
+              ) : (
+                <span className="rev-cc-delta-down">
+                  <ArrowDownRight size={13} /> {kpis?.gbv_delta_pct}%
+                </span>
+              )}
+              <span>vs prior period</span>
+            </div>
+          </div>
 
-      {actionStatus && (
-        <div className="mb-6 p-3 rounded-lg bg-emerald-950/50 border border-emerald-800 text-emerald-300 text-xs flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-          <span>{actionStatus}</span>
-        </div>
-      )}
+          <div className="rev-cc-kpi-card">
+            <div className="rev-cc-kpi-head">
+              <span className="rev-cc-kpi-title">Net Platform Revenue</span>
+              <span className="rev-cc-kpi-icon"><TrendingUp size={16} /></span>
+            </div>
+            <div className="rev-cc-kpi-value" style={{ color: "#059669" }}>
+              ${kpis ? kpis.net_platform_revenue.toLocaleString(undefined, { minimumFractionDigits: 2 }) : "0.00"}
+            </div>
+            <div className="rev-cc-kpi-foot">
+              {kpis && kpis.net_revenue_delta_pct >= 0 ? (
+                <span className="rev-cc-delta-up">
+                  <ArrowUpRight size={13} /> +{kpis.net_revenue_delta_pct}%
+                </span>
+              ) : (
+                <span className="rev-cc-delta-down">
+                  <ArrowDownRight size={13} /> {kpis?.net_revenue_delta_pct}%
+                </span>
+              )}
+              <span>vs prior period</span>
+            </div>
+          </div>
 
-      {/* Executive KPI Ribbon */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 shadow-sm relative overflow-hidden">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-slate-400 uppercase font-medium">Gross Booking Value</span>
-            <DollarSign className="w-4 h-4 text-emerald-400" />
+          <div className="rev-cc-kpi-card">
+            <div className="rev-cc-kpi-head">
+              <span className="rev-cc-kpi-title">Effective Take Rate</span>
+              <span className="rev-cc-kpi-icon"><Tag size={16} /></span>
+            </div>
+            <div className="rev-cc-kpi-value">
+              {kpis ? kpis.effective_take_rate : "12.0"}%
+            </div>
+            <div className="rev-cc-kpi-foot">
+              <span>${kpis?.total_platform_fee.toFixed(2) || "0.00"} fee / ${kpis?.total_discount_spent.toFixed(2) || "0.00"} promo</span>
+            </div>
           </div>
-          <div className="text-2xl font-bold text-white mb-1">
-            ${kpis ? kpis.gbv.toLocaleString(undefined, { minimumFractionDigits: 2 }) : "0.00"}
-          </div>
-          <div className="flex items-center gap-1 text-[11px]">
-            {kpis && kpis.gbv_delta_pct >= 0 ? (
-              <span className="text-emerald-400 font-medium flex items-center">
-                <ArrowUpRight className="w-3 h-3" /> +{kpis.gbv_delta_pct}%
-              </span>
-            ) : (
-              <span className="text-rose-400 font-medium flex items-center">
-                <ArrowDownRight className="w-3 h-3" /> {kpis?.gbv_delta_pct}%
-              </span>
-            )}
-            <span className="text-slate-500">vs prior period</span>
-          </div>
-        </div>
 
-        <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 shadow-sm relative overflow-hidden">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-slate-400 uppercase font-medium">Net Platform Revenue</span>
-            <TrendingUp className="w-4 h-4 text-cyan-400" />
-          </div>
-          <div className="text-2xl font-bold text-cyan-300 mb-1">
-            ${kpis ? kpis.net_platform_revenue.toLocaleString(undefined, { minimumFractionDigits: 2 }) : "0.00"}
-          </div>
-          <div className="flex items-center gap-1 text-[11px]">
-            {kpis && kpis.net_revenue_delta_pct >= 0 ? (
-              <span className="text-emerald-400 font-medium flex items-center">
-                <ArrowUpRight className="w-3 h-3" /> +{kpis.net_revenue_delta_pct}%
-              </span>
-            ) : (
-              <span className="text-rose-400 font-medium flex items-center">
-                <ArrowDownRight className="w-3 h-3" /> {kpis?.net_revenue_delta_pct}%
-              </span>
-            )}
-            <span className="text-slate-500">vs prior period</span>
-          </div>
-        </div>
-
-        <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 shadow-sm relative overflow-hidden">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-slate-400 uppercase font-medium">Effective Take Rate</span>
-            <Tag className="w-4 h-4 text-indigo-400" />
-          </div>
-          <div className="text-2xl font-bold text-indigo-300 mb-1">
-            {kpis ? kpis.effective_take_rate : "12.0"}%
-          </div>
-          <div className="text-[11px] text-slate-500">
-            ${kpis?.total_platform_fee.toFixed(2)} collected / ${kpis?.total_discount_spent.toFixed(2)} promo
-          </div>
-        </div>
-
-        <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 shadow-sm relative overflow-hidden">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-slate-400 uppercase font-medium">Paid Bookings</span>
-            <Users className="w-4 h-4 text-violet-400" />
-          </div>
-          <div className="text-2xl font-bold text-white mb-1">
-            {kpis ? kpis.paid_bookings_count : 0}
-          </div>
-          <div className="flex items-center gap-1 text-[11px]">
-            {kpis && kpis.paid_bookings_delta_pct >= 0 ? (
-              <span className="text-emerald-400 font-medium flex items-center">
-                <ArrowUpRight className="w-3 h-3" /> +{kpis.paid_bookings_delta_pct}%
-              </span>
-            ) : (
-              <span className="text-rose-400 font-medium flex items-center">
-                <ArrowDownRight className="w-3 h-3" /> {kpis?.paid_bookings_delta_pct}%
-              </span>
-            )}
-            <span className="text-slate-500">vs prior period</span>
+          <div className="rev-cc-kpi-card">
+            <div className="rev-cc-kpi-head">
+              <span className="rev-cc-kpi-title">Paid Bookings</span>
+              <span className="rev-cc-kpi-icon"><Users size={16} /></span>
+            </div>
+            <div className="rev-cc-kpi-value">
+              {kpis ? kpis.paid_bookings_count : 0}
+            </div>
+            <div className="rev-cc-kpi-foot">
+              {kpis && kpis.paid_bookings_delta_pct >= 0 ? (
+                <span className="rev-cc-delta-up">
+                  <ArrowUpRight size={13} /> +{kpis.paid_bookings_delta_pct}%
+                </span>
+              ) : (
+                <span className="rev-cc-delta-down">
+                  <ArrowDownRight size={13} /> {kpis?.paid_bookings_delta_pct}%
+                </span>
+              )}
+              <span>completed</span>
+            </div>
           </div>
         </div>
 
-        <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 shadow-sm relative overflow-hidden">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-slate-400 uppercase font-medium">Local Payables</span>
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+        {/* Secondary Metric Strip */}
+        <div className="rev-cc-subkpi-grid">
+          <div className="rev-cc-subkpi-card">
+            <div className="rev-cc-subkpi-label">Local Payables (Escrow)</div>
+            <div className="rev-cc-subkpi-val">${kpis?.total_local_payable.toFixed(2) || "0.00"}</div>
           </div>
-          <div className="text-2xl font-bold text-slate-200 mb-1">
-            ${kpis ? kpis.total_local_payable.toLocaleString(undefined, { minimumFractionDigits: 2 }) : "0.00"}
+          <div className="rev-cc-subkpi-card">
+            <div className="rev-cc-subkpi-label">Promo Subsidies</div>
+            <div className="rev-cc-subkpi-val" style={{ color: "#d97706" }}>${kpis?.total_discount_spent.toFixed(2) || "0.00"}</div>
           </div>
-          <div className="text-[11px] text-slate-500">100% Host Subtotal Protected</div>
+          <div className="rev-cc-subkpi-card">
+            <div className="rev-cc-subkpi-label">Referral Liabilities</div>
+            <div className="rev-cc-subkpi-val" style={{ color: "#6366f1" }}>${kpis?.total_referral_cost.toFixed(2) || "0.00"}</div>
+          </div>
+          <div className="rev-cc-subkpi-card">
+            <div className="rev-cc-subkpi-label">Refunds & Chargebacks</div>
+            <div className="rev-cc-subkpi-val" style={{ color: "#e11d48" }}>${kpis?.total_refund_volume.toFixed(2) || "0.00"}</div>
+          </div>
         </div>
 
-        <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 shadow-sm relative overflow-hidden">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-slate-400 uppercase font-medium">Promo Subsidies</span>
-            <Tag className="w-4 h-4 text-amber-400" />
-          </div>
-          <div className="text-2xl font-bold text-amber-300 mb-1">
-            ${kpis ? kpis.total_discount_spent.toFixed(2) : "0.00"}
-          </div>
-          <div className="text-[11px] text-slate-500">Platform-funded discounts</div>
+        {/* Navigation Tabs */}
+        <div className="rev-cc-tabs-bar">
+          {[
+            { id: "overview", label: "Trends & Unit Economics", icon: TrendingUp },
+            { id: "destinations", label: "Geographic Breakdown", icon: MapPin },
+            { id: "categories", label: "Experience Categories", icon: Layers },
+            { id: "locals", label: "Host Performance", icon: Users },
+            { id: "marketing", label: "Campaigns & Referrals", icon: Tag },
+            { id: "reconciliation", label: "Reconciliation Ledger", icon: ShieldCheck },
+            { id: "settlements", label: "Settlement Operations", icon: Clock },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id as any)}
+                className={
+                  activeTab === tab.id
+                    ? "rev-cc-tab-btn active"
+                    : "rev-cc-tab-btn"
+                }
+              >
+                <Icon size={14} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
 
-        <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 shadow-sm relative overflow-hidden">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-slate-400 uppercase font-medium">Referral Liabilities</span>
-            <Users className="w-4 h-4 text-sky-400" />
-          </div>
-          <div className="text-2xl font-bold text-sky-300 mb-1">
-            ${kpis ? kpis.total_referral_cost.toFixed(2) : "0.00"}
-          </div>
-          <div className="text-[11px] text-slate-500">Qualified referrer rewards</div>
-        </div>
+        {/* Tab 1: Overview & Trends */}
+        {activeTab === "overview" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            <div className="rev-cc-panel">
+              <div className="rev-cc-panel-head">
+                <div>
+                  <h3 className="rev-cc-panel-title">Revenue Trajectory & Daily Volume</h3>
+                  <div className="rev-cc-panel-desc">Daily progression of Gross Booking Value and Net Yield.</div>
+                </div>
+                <div style={{ fontSize: "11px", color: "#6b8076", fontWeight: 700 }}>
+                  Green = Net Revenue • Light = Local Payouts
+                </div>
+              </div>
 
-        <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 shadow-sm relative overflow-hidden">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-slate-400 uppercase font-medium">Refund Volume</span>
-            <AlertTriangle className="w-4 h-4 text-rose-400" />
-          </div>
-          <div className="text-2xl font-bold text-rose-300 mb-1">
-            ${kpis ? kpis.total_refund_volume.toFixed(2) : "0.00"}
-          </div>
-          <div className="text-[11px] text-slate-500">{kpis?.refund_count || 0} processed refunds</div>
-        </div>
-      </div>
-
-      {/* Tab Navigation */}
-      <div className="flex items-center gap-2 border-b border-slate-800 mb-6 overflow-x-auto pb-2">
-        {[
-          { id: "overview", label: "Overview & Trends", icon: TrendingUp },
-          { id: "destinations", label: "Destinations", icon: MapPin },
-          { id: "categories", label: "Categories", icon: Layers },
-          { id: "locals", label: "Local Partners", icon: Users },
-          { id: "marketing", label: "Campaigns & Referrals", icon: Tag },
-          { id: "reconciliation", label: "Reconciliation", icon: ShieldCheck },
-          { id: "payouts", label: "Payout Liabilities & Aging", icon: Clock },
-          { id: "exports", label: "Financial Exports", icon: Download },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`px-4 py-2 text-xs font-medium rounded-lg flex items-center gap-1.5 whitespace-nowrap transition-all ${
-                activeTab === tab.id
-                  ? "bg-slate-800 text-emerald-400 border border-slate-700 shadow-sm"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Tab Contents */}
-      {loading ? (
-        <div className="p-12 text-center text-slate-500 text-sm">Loading authoritative revenue intelligence…</div>
-      ) : (
-        <>
-          {/* 1. Overview & Trends Tab */}
-          {activeTab === "overview" && (
-            <div className="space-y-6">
-              {/* Trend Chart */}
-              <div className="bg-slate-900/80 p-6 rounded-xl border border-slate-800">
-                <h3 className="text-sm font-semibold text-slate-200 mb-4 flex items-center justify-between">
-                  <span>Revenue & Gross Booking Trajectory</span>
-                  <span className="text-xs text-slate-500 font-normal">Aggregated chronological buckets</span>
-                </h3>
-                {analytics?.trends && analytics.trends.length > 0 ? (
-                  <div className="h-64 flex items-end gap-2 pt-8 pb-4 px-2 border-b border-slate-800 overflow-x-auto">
-                    {analytics.trends.map((t, idx) => {
-                      const maxGbv = Math.max(...analytics.trends.map((p) => p.gbv), 100);
-                      const heightPct = Math.max((t.gbv / maxGbv) * 100, 4);
-                      const netPct = Math.max((t.net_revenue / maxGbv) * 100, 2);
-                      return (
-                        <div key={idx} className="flex-1 min-w-[36px] flex flex-col items-center gap-1 group relative">
-                          {/* Tooltip */}
-                          <div className="absolute -top-14 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950 border border-slate-700 text-[10px] text-slate-200 p-1.5 rounded shadow-xl pointer-events-none whitespace-nowrap z-20">
-                            <div>{t.label} ({t.date})</div>
-                            <div className="text-emerald-400 font-bold">GBV: ${t.gbv.toFixed(2)}</div>
-                            <div className="text-cyan-400">Net: ${t.net_revenue.toFixed(2)}</div>
-                          </div>
-                          {/* Bars */}
-                          <div className="w-full flex items-end justify-center gap-1 h-48">
-                            <div
-                              style={{ height: `${heightPct}%` }}
-                              className="w-3 bg-emerald-500/80 hover:bg-emerald-400 rounded-t transition-all"
-                            />
-                            <div
-                              style={{ height: `${netPct}%` }}
-                              className="w-2 bg-cyan-500/80 hover:bg-cyan-400 rounded-t transition-all"
-                            />
-                          </div>
-                          <span className="text-[10px] text-slate-500 truncate w-full text-center">{t.label}</span>
+              {analytics?.trends && analytics.trends.length > 0 ? (
+                <div className="rev-cc-chart-container">
+                  {analytics.trends.map((t, idx) => {
+                    const maxGbv = Math.max(...analytics.trends.map((x) => x.gbv), 100);
+                    const heightPct = Math.max((t.gbv / maxGbv) * 100, 4);
+                    return (
+                      <div key={idx} className="rev-cc-chart-col">
+                        <div className="rev-cc-chart-bar-wrap">
+                          <div
+                            className="rev-cc-chart-bar-fill"
+                            style={{ height: `${heightPct}%` }}
+                            title={`${t.label}: GBV $${t.gbv.toFixed(2)}, Net $${t.net_revenue.toFixed(2)} (${t.bookings_count} bookings)`}
+                          />
                         </div>
-                      );
-                    })}
+                        <span className="rev-cc-chart-label">{t.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="empty">No trend points available for this period.</div>
+              )}
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "16px" }}>
+              <div className="rev-cc-panel">
+                <h4 className="rev-cc-panel-title" style={{ fontSize: "14px", marginBottom: "12px" }}>Platform Take-Rate Health</h4>
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "13px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "#6b8076" }}>Standard Take Rate</span>
+                    <strong>12.00%</strong>
                   </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "#6b8076" }}>Effective Realized Rate</span>
+                    <strong style={{ color: "#059669" }}>{kpis?.effective_take_rate || 12.00}%</strong>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "#6b8076" }}>Discount Drag</span>
+                    <span style={{ color: "#d97706" }}>-${kpis?.total_discount_spent.toFixed(2) || "0.00"}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "#6b8076" }}>Referral Reward Cost</span>
+                    <span style={{ color: "#6366f1" }}>-${kpis?.total_referral_cost.toFixed(2) || "0.00"}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rev-cc-panel">
+                <h4 className="rev-cc-panel-title" style={{ fontSize: "14px", marginBottom: "12px" }}>Escrow & Liquidity Position</h4>
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "13px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "#6b8076" }}>Disbursed Local Payouts</span>
+                    <strong style={{ color: "#059669" }}>${kpis?.payout_paid.toFixed(2) || "0.00"}</strong>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "#6b8076" }}>Held Escrow (In-Trip)</span>
+                    <strong style={{ color: "#d97706" }}>${kpis?.payout_held.toFixed(2) || "0.00"}</strong>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "#6b8076" }}>Unpaid Settlement Backlog</span>
+                    <strong style={{ color: "#e11d48" }}>${kpis?.payout_unpaid.toFixed(2) || "0.00"}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 2: Destinations */}
+        {activeTab === "destinations" && (
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Destination</th>
+                  <th>Country</th>
+                  <th>Paid Bookings</th>
+                  <th>Gross Booking Value</th>
+                  <th>Local Payouts</th>
+                  <th>Platform Revenue</th>
+                  <th>Effective Take Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analytics?.by_city && analytics.by_city.length > 0 ? (
+                  analytics.by_city.map((c, i) => (
+                    <tr key={i}>
+                      <td><strong>{c.city_name}</strong></td>
+                      <td>{c.country_code}</td>
+                      <td>{c.paid_bookings_count}</td>
+                      <td>${c.gbv.toFixed(2)}</td>
+                      <td>${c.local_payable.toFixed(2)}</td>
+                      <td><strong style={{ color: "#059669" }}>${c.platform_revenue.toFixed(2)}</strong></td>
+                      <td>{c.effective_take_rate}%</td>
+                    </tr>
+                  ))
                 ) : (
-                  <div className="p-8 text-center text-xs text-slate-500">No trend transactions in this window.</div>
+                  <tr>
+                    <td colSpan={7} className="text-center py-6 text-slate-400">No destination revenue records in this timeframe.</td>
+                  </tr>
                 )}
-                <div className="flex items-center justify-center gap-6 mt-4 text-xs text-slate-400">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 bg-emerald-500 rounded-sm" /> Gross Booking Value (GBV)
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 bg-cyan-500 rounded-sm" /> Net Platform Revenue
-                  </div>
-                </div>
-              </div>
+              </tbody>
+            </table>
+          </div>
+        )}
 
-              {/* Gateway & Payment Intelligence */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-slate-900/80 p-5 rounded-xl border border-slate-800">
-                  <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Payment Success Rate</h4>
-                  <div className="text-3xl font-bold text-emerald-400 mb-1">
-                    {analytics?.payment_stats.success_rate_pct}%
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    {analytics?.payment_stats.paid_count} captured out of {analytics?.payment_stats.total_payment_attempts} attempts.
-                  </p>
-                </div>
-                <div className="bg-slate-900/80 p-5 rounded-xl border border-slate-800">
-                  <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Payment Failure Rate</h4>
-                  <div className="text-3xl font-bold text-rose-400 mb-1">
-                    {analytics?.payment_stats.failure_rate_pct}%
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    {analytics?.payment_stats.failed_count} failed or abandoned transactions.
-                  </p>
-                </div>
-                <div className="bg-slate-900/80 p-5 rounded-xl border border-slate-800">
-                  <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Refund Ratio</h4>
-                  <div className="text-3xl font-bold text-amber-400 mb-1">
-                    {analytics?.payment_stats.refund_rate_pct}%
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    {analytics?.payment_stats.refunded_count} refunds processed.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 2. Destinations Tab */}
-          {activeTab === "destinations" && (
-            <div className="bg-slate-900/80 rounded-xl border border-slate-800 overflow-hidden">
-              <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-200">Revenue by Destination City</h3>
-                <span className="text-xs text-slate-500">{analytics?.by_city.length || 0} cities with paid activity</span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-slate-300">
-                  <thead className="bg-slate-950/60 text-slate-400 border-b border-slate-800 uppercase tracking-wider text-[10px]">
-                    <tr>
-                      <th className="py-3 px-4">City / Destination</th>
-                      <th className="py-3 px-4">Country</th>
-                      <th className="py-3 px-4 text-right">Paid Bookings</th>
-                      <th className="py-3 px-4 text-right">Gross Booking Value</th>
-                      <th className="py-3 px-4 text-right">Local Payables</th>
-                      <th className="py-3 px-4 text-right">Platform Revenue</th>
-                      <th className="py-3 px-4 text-right">Take Rate</th>
+        {/* Tab 3: Categories */}
+        {activeTab === "categories" && (
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Service Category</th>
+                  <th>Paid Bookings</th>
+                  <th>Gross Booking Value</th>
+                  <th>Local Payouts</th>
+                  <th>Platform Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analytics?.by_category && analytics.by_category.length > 0 ? (
+                  analytics.by_category.map((cat, i) => (
+                    <tr key={i}>
+                      <td><strong>{cat.category_name}</strong></td>
+                      <td>{cat.paid_bookings_count}</td>
+                      <td>${cat.gbv.toFixed(2)}</td>
+                      <td>${cat.local_payable.toFixed(2)}</td>
+                      <td><strong style={{ color: "#059669" }}>${cat.platform_revenue.toFixed(2)}</strong></td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/60">
-                    {analytics?.by_city.map((c, i) => (
-                      <tr key={i} className="hover:bg-slate-800/40">
-                        <td className="py-3 px-4 font-medium text-white flex items-center gap-1.5">
-                          <MapPin className="w-3.5 h-3.5 text-emerald-400" />
-                          {c.city_name}
-                        </td>
-                        <td className="py-3 px-4 text-slate-400">{c.country_code}</td>
-                        <td className="py-3 px-4 text-right">{c.paid_bookings_count}</td>
-                        <td className="py-3 px-4 text-right font-semibold text-emerald-400">${c.gbv.toFixed(2)}</td>
-                        <td className="py-3 px-4 text-right">${c.local_payable.toFixed(2)}</td>
-                        <td className="py-3 px-4 text-right text-cyan-300 font-medium">${c.platform_revenue.toFixed(2)}</td>
-                        <td className="py-3 px-4 text-right">{c.effective_take_rate}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="text-center py-6 text-slate-400">No category revenue records in this timeframe.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-          {/* 3. Categories Tab */}
-          {activeTab === "categories" && (
-            <div className="bg-slate-900/80 rounded-xl border border-slate-800 overflow-hidden">
-              <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-200">Revenue by Service Category</h3>
-                <span className="text-xs text-slate-500">{analytics?.by_category.length || 0} categories</span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-slate-300">
-                  <thead className="bg-slate-950/60 text-slate-400 border-b border-slate-800 uppercase tracking-wider text-[10px]">
-                    <tr>
-                      <th className="py-3 px-4">Service Category</th>
-                      <th className="py-3 px-4 text-right">Bookings Count</th>
-                      <th className="py-3 px-4 text-right">Gross Booking Value</th>
-                      <th className="py-3 px-4 text-right">Local Payables</th>
-                      <th className="py-3 px-4 text-right">Platform Revenue</th>
+        {/* Tab 4: Local Hosts */}
+        {activeTab === "locals" && (
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Host ID</th>
+                  <th>Host Name</th>
+                  <th>Primary City</th>
+                  <th>Bookings Count</th>
+                  <th>Host Gross Earnings</th>
+                  <th>Platform Fee Generated</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analytics?.by_local && analytics.by_local.length > 0 ? (
+                  analytics.by_local.map((l, i) => (
+                    <tr key={i}>
+                      <td>#{l.local_id}</td>
+                      <td><strong>{l.local_name}</strong></td>
+                      <td>{l.city_name}</td>
+                      <td>{l.paid_bookings_count}</td>
+                      <td>${l.gross_earnings.toFixed(2)}</td>
+                      <td><strong style={{ color: "#059669" }}>${l.platform_revenue_generated.toFixed(2)}</strong></td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/60">
-                    {analytics?.by_category.map((cat, i) => (
-                      <tr key={i} className="hover:bg-slate-800/40">
-                        <td className="py-3 px-4 font-medium text-white flex items-center gap-1.5">
-                          <Layers className="w-3.5 h-3.5 text-indigo-400" />
-                          {cat.category_name}
-                        </td>
-                        <td className="py-3 px-4 text-right">{cat.paid_bookings_count}</td>
-                        <td className="py-3 px-4 text-right font-semibold text-emerald-400">${cat.gbv.toFixed(2)}</td>
-                        <td className="py-3 px-4 text-right">${cat.local_payable.toFixed(2)}</td>
-                        <td className="py-3 px-4 text-right text-cyan-300 font-medium">${cat.platform_revenue.toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="text-center py-6 text-slate-400">No host earnings records in this timeframe.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-          {/* 4. Local Partners Tab */}
-          {activeTab === "locals" && (
-            <div className="bg-slate-900/80 rounded-xl border border-slate-800 overflow-hidden">
-              <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-200">Local Partner Performance Ranking</h3>
-                <span className="text-xs text-slate-500">Sorted by gross host earnings</span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-slate-300">
-                  <thead className="bg-slate-950/60 text-slate-400 border-b border-slate-800 uppercase tracking-wider text-[10px]">
+        {/* Tab 5: Marketing & Campaigns */}
+        {activeTab === "marketing" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            <div className="table-wrap">
+              <h4 style={{ padding: "14px 18px 0", margin: 0, fontSize: "14px" }}>Promotional Discount ROI</h4>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Promo Code</th>
+                    <th>Type</th>
+                    <th>Redemptions</th>
+                    <th>Total Subsidy Burn</th>
+                    <th>Associated GBV</th>
+                    <th>Net Revenue Yield</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {analytics?.by_promo && analytics.by_promo.length > 0 ? (
+                    analytics.by_promo.map((p, i) => (
+                      <tr key={i}>
+                        <td><strong>{p.code}</strong></td>
+                        <td>{p.discount_type}</td>
+                        <td>{p.redemptions_count}</td>
+                        <td style={{ color: "#d97706" }}>-${p.total_discount_burn.toFixed(2)}</td>
+                        <td>${p.associated_gbv.toFixed(2)}</td>
+                        <td><strong style={{ color: "#059669" }}>${p.net_platform_revenue.toFixed(2)}</strong></td>
+                      </tr>
+                    ))
+                  ) : (
                     <tr>
-                      <th className="py-3 px-4">Local Partner</th>
-                      <th className="py-3 px-4">City</th>
-                      <th className="py-3 px-4 text-right">Paid Bookings</th>
-                      <th className="py-3 px-4 text-right">Gross Host Earnings</th>
-                      <th className="py-3 px-4 text-right">Platform Fee Contribution</th>
-                      <th className="py-3 px-4 text-center">Action</th>
+                      <td colSpan={6} className="text-center py-6 text-slate-400">No promotional campaign redemptions recorded.</td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/60">
-                    {analytics?.by_local.map((l, i) => (
-                      <tr key={i} className="hover:bg-slate-800/40">
-                        <td className="py-3 px-4 font-medium text-white">{l.local_name}</td>
-                        <td className="py-3 px-4 text-slate-400">{l.city_name}</td>
-                        <td className="py-3 px-4 text-right">{l.paid_bookings_count}</td>
-                        <td className="py-3 px-4 text-right font-semibold text-emerald-400">${l.gross_earnings.toFixed(2)}</td>
-                        <td className="py-3 px-4 text-right text-cyan-300 font-medium">${l.platform_revenue_generated.toFixed(2)}</td>
-                        <td className="py-3 px-4 text-center">
-                          <Link
-                            href={`/admin/bookings?local=${l.local_id}`}
-                            className="text-xs text-emerald-400 hover:underline"
-                          >
-                            View Bookings
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  )}
+                </tbody>
+              </table>
             </div>
-          )}
 
-          {/* 5. Campaigns & Referrals Tab */}
-          {activeTab === "marketing" && (
-            <div className="space-y-6">
-              {/* Promo Campaigns */}
-              <div className="bg-slate-900/80 rounded-xl border border-slate-800 overflow-hidden">
-                <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-                    <Tag className="w-4 h-4 text-amber-400" /> Promo Code Campaigns & Discount Burn
-                  </h3>
-                  <Link href="/admin/promotions" className="text-xs text-emerald-400 hover:underline">
-                    Manage Promo Codes
-                  </Link>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs text-slate-300">
-                    <thead className="bg-slate-950/60 text-slate-400 border-b border-slate-800 uppercase tracking-wider text-[10px]">
-                      <tr>
-                        <th className="py-3 px-4">Code</th>
-                        <th className="py-3 px-4">Type</th>
-                        <th className="py-3 px-4 text-right">Redemptions</th>
-                        <th className="py-3 px-4 text-right">Discount Burn</th>
-                        <th className="py-3 px-4 text-right">Associated GBV</th>
-                        <th className="py-3 px-4 text-right">Net Platform Yield</th>
+            <div className="table-wrap">
+              <h4 style={{ padding: "14px 18px 0", margin: 0, fontSize: "14px" }}>Referral Attribution Channel Performance</h4>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Referral Code</th>
+                    <th>Referrer Name</th>
+                    <th>Referred Users</th>
+                    <th>Completed Bookings</th>
+                    <th>Credits Earned</th>
+                    <th>Generated GBV</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {analytics?.by_referral && analytics.by_referral.length > 0 ? (
+                    analytics.by_referral.map((r, i) => (
+                      <tr key={i}>
+                        <td><strong>{r.code}</strong></td>
+                        <td>{r.referrer_name}</td>
+                        <td>{r.total_referred_users}</td>
+                        <td>{r.qualified_bookings_count}</td>
+                        <td style={{ color: "#6366f1" }}>${r.total_credits_earned.toFixed(2)}</td>
+                        <td><strong>${r.generated_booking_value.toFixed(2)}</strong></td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60">
-                      {analytics?.by_promo.map((p, i) => (
-                        <tr key={i} className="hover:bg-slate-800/40">
-                          <td className="py-3 px-4 font-mono font-bold text-amber-300">{p.code}</td>
-                          <td className="py-3 px-4 text-slate-400">{p.discount_type}</td>
-                          <td className="py-3 px-4 text-right">{p.redemptions_count}</td>
-                          <td className="py-3 px-4 text-right font-medium text-rose-300">-${p.total_discount_burn.toFixed(2)}</td>
-                          <td className="py-3 px-4 text-right text-emerald-400 font-medium">${p.associated_gbv.toFixed(2)}</td>
-                          <td className="py-3 px-4 text-right text-cyan-300 font-semibold">${p.net_platform_revenue.toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Referral Channels */}
-              <div className="bg-slate-900/80 rounded-xl border border-slate-800 overflow-hidden">
-                <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-                    <Users className="w-4 h-4 text-sky-400" /> Referral Acquisition & Rewards
-                  </h3>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs text-slate-300">
-                    <thead className="bg-slate-950/60 text-slate-400 border-b border-slate-800 uppercase tracking-wider text-[10px]">
-                      <tr>
-                        <th className="py-3 px-4">Referral Code</th>
-                        <th className="py-3 px-4">Referrer User</th>
-                        <th className="py-3 px-4 text-right">Referred Signups</th>
-                        <th className="py-3 px-4 text-right">Qualified Bookings</th>
-                        <th className="py-3 px-4 text-right">Credits Earned</th>
-                        <th className="py-3 px-4 text-right">Generated GBV</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60">
-                      {analytics?.by_referral.map((r, i) => (
-                        <tr key={i} className="hover:bg-slate-800/40">
-                          <td className="py-3 px-4 font-mono font-bold text-sky-300">{r.code}</td>
-                          <td className="py-3 px-4 text-white font-medium">{r.referrer_name}</td>
-                          <td className="py-3 px-4 text-right">{r.total_referred_users}</td>
-                          <td className="py-3 px-4 text-right font-medium text-emerald-400">{r.qualified_bookings_count}</td>
-                          <td className="py-3 px-4 text-right text-sky-300 font-medium">${r.total_credits_earned.toFixed(2)}</td>
-                          <td className="py-3 px-4 text-right text-emerald-400 font-semibold">${r.generated_booking_value.toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="text-center py-6 text-slate-400">No referral campaign activities recorded.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* 6. Reconciliation Explorer Tab */}
-          {activeTab === "reconciliation" && (
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400 font-medium">Status Filter:</span>
-                  {["all", "matched", "warning", "mismatch"].map((st) => (
-                    <button
-                      key={st}
-                      onClick={() => setReconFilter(st)}
-                      className={`px-3 py-1 text-xs rounded-lg uppercase tracking-wider font-semibold transition-all ${
-                        reconFilter === st
-                          ? st === "matched"
-                            ? "bg-emerald-500 text-white"
-                            : st === "warning"
-                            ? "bg-amber-500 text-black"
-                            : st === "mismatch"
-                            ? "bg-rose-500 text-white"
-                            : "bg-slate-700 text-white"
-                          : "bg-slate-800 text-slate-400 hover:bg-slate-700"
-                      }`}
-                    >
-                      {st}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-                  <input
-                    type="text"
-                    placeholder="Search by Booking #, traveler, local, tracker..."
-                    value={reconSearch}
-                    onChange={(e) => setReconSearch(e.target.value)}
-                    className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg pl-8 pr-3 py-1.5 w-72"
-                  />
-                </div>
-              </div>
-
-              <div className="bg-slate-900/80 rounded-xl border border-slate-800 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs text-slate-300">
-                    <thead className="bg-slate-950/60 text-slate-400 border-b border-slate-800 uppercase tracking-wider text-[10px]">
-                      <tr>
-                        <th className="py-3 px-4">Booking</th>
-                        <th className="py-3 px-4">Traveler / Local</th>
-                        <th className="py-3 px-4 text-right">Expected Total</th>
-                        <th className="py-3 px-4 text-right">Safepay Charged</th>
-                        <th className="py-3 px-4 text-right">Local Payable</th>
-                        <th className="py-3 px-4 text-right">Platform Fee</th>
-                        <th className="py-3 px-4 text-center">Payout Status</th>
-                        <th className="py-3 px-4 text-center">Audit Result</th>
-                        <th className="py-3 px-4">Notes</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60">
-                      {filteredReconRows.map((r) => (
-                        <tr key={r.booking_id} className="hover:bg-slate-800/40">
-                          <td className="py-3 px-4 font-mono font-bold text-white">
-                            <Link href={`/admin/bookings?id=${r.booking_id}`} className="hover:text-emerald-400 underline">
-                              #{r.booking_id}
-                            </Link>
-                            <span className="block text-[10px] text-slate-500 font-normal">{r.booking_status}</span>
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="text-white font-medium">{r.traveler_name}</div>
-                            <div className="text-slate-400 text-[11px]">→ {r.local_name}</div>
-                          </td>
-                          <td className="py-3 px-4 text-right font-medium text-slate-200">${r.booking_total.toFixed(2)}</td>
-                          <td className="py-3 px-4 text-right font-medium text-emerald-400">
-                            ${r.charged_amount.toFixed(2)}
-                            <span className="block text-[10px] text-slate-500 font-mono">{r.payment_status}</span>
-                          </td>
-                          <td className="py-3 px-4 text-right">${r.local_payable.toFixed(2)}</td>
-                          <td className="py-3 px-4 text-right text-cyan-300 font-medium">${r.platform_fee.toFixed(2)}</td>
-                          <td className="py-3 px-4 text-center">
-                            <span
-                              className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
-                                r.payout_status === "paid"
-                                  ? "bg-emerald-950 text-emerald-300 border border-emerald-800"
-                                  : r.payout_status === "unpaid"
-                                  ? "bg-amber-950 text-amber-300 border border-amber-800"
-                                  : r.payout_status === "scheduled"
-                                  ? "bg-cyan-950 text-cyan-300 border border-cyan-800"
-                                  : "bg-slate-800 text-slate-400"
-                              }`}
-                            >
-                              {r.payout_status}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-center">
-                            <span
-                              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                                r.reconciliation_status === "matched"
-                                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                                  : r.reconciliation_status === "warning"
-                                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                                  : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
-                              }`}
-                            >
-                              {r.reconciliation_status}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-slate-400 text-[11px] max-w-xs truncate">{r.discrepancy_note}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 7. Payout Liabilities & Aging Tab */}
-          {activeTab === "payouts" && (
-            <div className="space-y-6">
-              {/* Aging Buckets */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {analytics?.payout_aging.buckets.map((b) => (
-                  <div key={b.bucket_label} className="bg-slate-900/80 p-4 rounded-xl border border-slate-800">
-                    <span className="text-xs text-slate-400 uppercase font-medium">Aging: {b.bucket_label}</span>
-                    <div className="text-2xl font-bold text-amber-300 my-1">${b.amount.toFixed(2)}</div>
-                    <div className="text-xs text-slate-500">
-                      {b.count} settlements across {b.local_count} local partners
-                    </div>
-                  </div>
+        {/* Tab 6: Reconciliation Ledger */}
+        {activeTab === "reconciliation" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <div className="rev-cc-horizon-bar">
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                <span className="rev-cc-horizon-label"><Filter size={13} /> Filter:</span>
+                {[
+                  { id: "all", label: "All Audit Rows" },
+                  { id: "MATCHED", label: "100% Matched" },
+                  { id: "DISCREPANCY", label: "Discrepancies" },
+                  { id: "PENDING_CAPTURE", label: "Pending Capture" },
+                  { id: "REFUNDED", label: "Refunded" },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setReconFilter(f.id)}
+                    className={
+                      reconFilter === f.id
+                        ? "rev-cc-pill active"
+                        : "rev-cc-pill"
+                    }
+                  >
+                    {f.label}
+                  </button>
                 ))}
               </div>
 
-              {/* Batch Action Toolbar */}
-              <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-semibold text-slate-300">
-                    {selectedLedgerIds.length} settlement(s) selected
-                  </span>
-                  <select
-                    value={batchTargetStatus}
-                    onChange={(e) => setBatchTargetStatus(e.target.value as any)}
-                    className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5"
-                  >
-                    <option value="scheduled">Set status: SCHEDULED</option>
-                    <option value="paid">Set status: PAID (Disbursed)</option>
-                  </select>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <div style={{ position: "relative" }}>
+                  <Search size={14} style={{ position: "absolute", left: "10px", top: "10px", color: "#9ca3af" }} />
                   <input
                     type="text"
-                    placeholder="Batch reference / wire notes..."
-                    value={batchNote}
-                    onChange={(e) => setBatchNote(e.target.value)}
-                    className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-1.5 w-64"
+                    placeholder="Search ID, traveler, host..."
+                    value={reconSearch}
+                    onChange={(e) => setReconSearch(e.target.value)}
+                    style={{ paddingLeft: "32px", fontSize: "12px", borderRadius: "8px", border: "1px solid #dce5e0", height: "34px" }}
                   />
                 </div>
+                <button
+                  type="button"
+                  onClick={() => handleExport("reconciliation")}
+                  className="rev-cc-export-btn"
+                >
+                  <Download size={13} /> Export CSV
+                </button>
+              </div>
+            </div>
+
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Booking</th>
+                    <th>Traveler</th>
+                    <th>Host Partner</th>
+                    <th>Booking Total</th>
+                    <th>Payment Status</th>
+                    <th>Safepay Tracker</th>
+                    <th>Charged Total</th>
+                    <th>Local Payout</th>
+                    <th>Platform Fee</th>
+                    <th>Audit Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredReconRows.length > 0 ? (
+                    filteredReconRows.map((r) => (
+                      <tr key={r.booking_id}>
+                        <td><strong>#{r.booking_id}</strong></td>
+                        <td>{r.traveler_name}</td>
+                        <td>{r.local_name}</td>
+                        <td>${r.booking_total.toFixed(2)}</td>
+                        <td>
+                          <span className={r.payment_status === "paid" ? "badge badge-success" : "badge badge-warning"}>
+                            {r.payment_status}
+                          </span>
+                        </td>
+                        <td><code>{r.safepay_tracker || "N/A"}</code></td>
+                        <td>${r.charged_amount.toFixed(2)}</td>
+                        <td>${r.local_payable.toFixed(2)}</td>
+                        <td><strong style={{ color: "#059669" }}>${r.platform_fee.toFixed(2)}</strong></td>
+                        <td>
+                          <span
+                            className={
+                              r.reconciliation_status === "MATCHED"
+                                ? "badge badge-success"
+                                : r.reconciliation_status === "DISCREPANCY"
+                                ? "badge badge-danger"
+                                : "badge badge-neutral"
+                            }
+                          >
+                            {r.reconciliation_status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={10} className="text-center py-6 text-slate-400">No reconciliation records match current filters.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 7: Settlement Operations */}
+        {activeTab === "settlements" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            {/* Aging buckets */}
+            <div className="rev-cc-aging-grid">
+              {analytics?.aging_buckets?.map((b) => (
+                <div
+                  key={b.bucket_label}
+                  className={b.bucket_label.includes("30+") ? "rev-cc-aging-card urgent" : "rev-cc-aging-card"}
+                >
+                  <div className="rev-cc-aging-title">{b.bucket_label} Aging</div>
+                  <div className="rev-cc-aging-amount">${b.total_amount.toFixed(2)}</div>
+                  <div className="rev-cc-aging-count">{b.count} pending items</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Batch action toolbar */}
+            <div className="rev-cc-horizon-bar">
+              <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+                <span className="rev-cc-horizon-label">Batch Action:</span>
+                <select
+                  value={batchTargetStatus}
+                  onChange={(e) => setBatchTargetStatus(e.target.value as any)}
+                  style={{ padding: "6px 10px", fontSize: "12px", borderRadius: "8px", border: "1px solid #dce5e0" }}
+                >
+                  <option value="scheduled">Mark Selected as SCHEDULED</option>
+                  <option value="paid">Mark Selected as PAID</option>
+                </select>
+
+                <input
+                  type="text"
+                  placeholder="Optional reference note..."
+                  value={batchNote}
+                  onChange={(e) => setBatchNote(e.target.value)}
+                  style={{ padding: "6px 10px", fontSize: "12px", borderRadius: "8px", border: "1px solid #dce5e0", width: "220px" }}
+                />
 
                 <button
+                  type="button"
                   disabled={selectedLedgerIds.length === 0 || batchSubmitting}
                   onClick={handleBatchPayout}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-md transition-all"
+                  className="btn btn-primary"
+                  style={{ padding: "6px 14px", fontSize: "12px" }}
                 >
-                  {batchSubmitting ? "Updating..." : "Execute Batch Transition"}
+                  {batchSubmitting ? "Processing..." : `Execute Batch (${selectedLedgerIds.length})`}
                 </button>
               </div>
 
-              {/* Settlements Table */}
-              <div className="bg-slate-900/80 rounded-xl border border-slate-800 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs text-slate-300">
-                    <thead className="bg-slate-950/60 text-slate-400 border-b border-slate-800 uppercase tracking-wider text-[10px]">
-                      <tr>
-                        <th className="py-3 px-4 w-10 text-center">
+              <div>
+                <button
+                  type="button"
+                  onClick={() => handleExport("settlements")}
+                  className="rev-cc-export-btn"
+                >
+                  <Download size={13} /> Export Payout Manifest
+                </button>
+              </div>
+            </div>
+
+            {/* Settlements table */}
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th style={{ width: "36px" }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedLedgerIds.length > 0 && selectedLedgerIds.length === settlements.length}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedLedgerIds(settlements.map((s) => s.id));
+                          else setSelectedLedgerIds([]);
+                        }}
+                      />
+                    </th>
+                    <th>Ledger ID</th>
+                    <th>Booking ID</th>
+                    <th>Booking Amount</th>
+                    <th>Fee %</th>
+                    <th>Platform Fee</th>
+                    <th>Local Payout</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {settlements.length > 0 ? (
+                    settlements.map((s) => (
+                      <tr key={s.id}>
+                        <td>
                           <input
                             type="checkbox"
-                            checked={
-                              settlements.length > 0 &&
-                              selectedLedgerIds.length === settlements.filter((s) => s.payout_status !== "void" && s.payout_status !== "paid").length
-                            }
+                            checked={selectedLedgerIds.includes(s.id)}
                             onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedLedgerIds(
-                                  settlements.filter((s) => s.payout_status !== "void" && s.payout_status !== "paid").map((s) => s.id)
-                                );
-                              } else {
-                                setSelectedLedgerIds([]);
-                              }
+                              if (e.target.checked) setSelectedLedgerIds([...selectedLedgerIds, s.id]);
+                              else setSelectedLedgerIds(selectedLedgerIds.filter((id) => id !== s.id));
                             }}
                           />
-                        </th>
-                        <th className="py-3 px-4">Ledger / Booking</th>
-                        <th className="py-3 px-4">Local Partner</th>
-                        <th className="py-3 px-4 text-right">Host Payable</th>
-                        <th className="py-3 px-4 text-right">Platform Fee</th>
-                        <th className="py-3 px-4 text-center">Status</th>
-                        <th className="py-3 px-4">Notes</th>
+                        </td>
+                        <td>#{s.id}</td>
+                        <td><strong>#{s.booking_id}</strong></td>
+                        <td>${s.total_booking_amount.toFixed(2)}</td>
+                        <td>{s.platform_commission_pct}%</td>
+                        <td><strong style={{ color: "#059669" }}>${s.platform_commission_amount.toFixed(2)}</strong></td>
+                        <td><strong>${s.local_amount.toFixed(2)}</strong></td>
+                        <td>
+                          <span
+                            className={
+                              s.payout_status === "paid"
+                                ? "badge badge-success"
+                                : s.payout_status === "scheduled"
+                                ? "badge badge-warning"
+                                : "badge badge-neutral"
+                            }
+                          >
+                            {s.payout_status}
+                          </span>
+                        </td>
+                        <td style={{ fontSize: "11px", color: "#6b8076" }}>{s.created_at?.slice(0, 10)}</td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60">
-                      {settlements.map((s) => (
-                        <tr key={s.id} className="hover:bg-slate-800/40">
-                          <td className="py-3 px-4 text-center">
-                            <input
-                              type="checkbox"
-                              disabled={s.payout_status === "void" || s.payout_status === "paid"}
-                              checked={selectedLedgerIds.includes(s.id)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedLedgerIds([...selectedLedgerIds, s.id]);
-                                } else {
-                                  setSelectedLedgerIds(selectedLedgerIds.filter((id) => id !== s.id));
-                                }
-                              }}
-                            />
-                          </td>
-                          <td className="py-3 px-4 font-mono font-bold text-white">
-                            Ledger #{s.id} (Booking #{s.booking_id})
-                          </td>
-                          <td className="py-3 px-4 font-medium text-white">{s.local_name}</td>
-                          <td className="py-3 px-4 text-right font-bold text-emerald-400">${s.local_amount.toFixed(2)}</td>
-                          <td className="py-3 px-4 text-right text-cyan-300">${s.platform_fee.toFixed(2)}</td>
-                          <td className="py-3 px-4 text-center">
-                            <span
-                              className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
-                                s.payout_status === "paid"
-                                  ? "bg-emerald-950 text-emerald-300 border border-emerald-800"
-                                  : s.payout_status === "unpaid"
-                                  ? "bg-amber-950 text-amber-300 border border-amber-800"
-                                  : s.payout_status === "scheduled"
-                                  ? "bg-cyan-950 text-cyan-300 border border-cyan-800"
-                                  : "bg-slate-800 text-slate-400"
-                              }`}
-                            >
-                              {s.payout_status}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-slate-400 text-[11px] max-w-xs truncate">{s.notes || "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={9} className="text-center py-6 text-slate-400">No settlement records available.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-          )}
-
-          {/* 8. Financial Exports Tab */}
-          {activeTab === "exports" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-slate-900/80 p-6 rounded-xl border border-slate-800 flex flex-col justify-between">
-                <div>
-                  <h4 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
-                    <Download className="w-4 h-4 text-emerald-400" /> Executive Revenue Summary CSV
-                  </h4>
-                  <p className="text-xs text-slate-400 mb-4">
-                    Authoritative high-level summary of Gross Booking Value, Local Payables, Platform Fees, Promo Subsidies, and Net Profit.
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleExport("summary")}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-2"
-                >
-                  <Download className="w-4 h-4" /> Download Summary CSV
-                </button>
-              </div>
-
-              <div className="bg-slate-900/80 p-6 rounded-xl border border-slate-800 flex flex-col justify-between">
-                <div>
-                  <h4 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-amber-400" /> Local Settlement & Payout Manifest CSV
-                  </h4>
-                  <p className="text-xs text-slate-400 mb-4">
-                    Bank-ready payout manifest containing local partner names, emails, amounts, currency, aging days, and disbursement status.
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleExport("settlements")}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-2"
-                >
-                  <Download className="w-4 h-4" /> Download Payout Manifest CSV
-                </button>
-              </div>
-
-              <div className="bg-slate-900/80 p-6 rounded-xl border border-slate-800 flex flex-col justify-between">
-                <div>
-                  <h4 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-cyan-400" /> Transaction Reconciliation Ledger CSV
-                  </h4>
-                  <p className="text-xs text-slate-400 mb-4">
-                    Line-by-line financial audit linking every booking with Safepay tracker tokens, local payouts, and discrepancy classifications.
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleExport("reconciliation")}
-                  className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-2"
-                >
-                  <Download className="w-4 h-4" /> Download Reconciliation CSV
-                </button>
-              </div>
-
-              <div className="bg-slate-900/80 p-6 rounded-xl border border-slate-800 flex flex-col justify-between">
-                <div>
-                  <h4 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
-                    <Tag className="w-4 h-4 text-indigo-400" /> Promotional & Referral Marketing Audit CSV
-                  </h4>
-                  <p className="text-xs text-slate-400 mb-4">
-                    Comprehensive audit of promo code discount spend and referral reward disbursements against generated marketplace volume.
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleExport("marketing")}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-2"
-                >
-                  <Download className="w-4 h-4" /> Download Marketing Audit CSV
-                </button>
-              </div>
-            </div>
-          )}
-        </>
-      )}
+          </div>
+        )}
+      </div>
     </AdminShell>
   );
 }

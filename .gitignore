@@ -61,6 +61,7 @@ Thumbs.db
 # Historical source bundles / exported archives
 *.zip
 *.rar
+*.tar.gz
 frontend/*.zip
 frontend/**/*.zip
 

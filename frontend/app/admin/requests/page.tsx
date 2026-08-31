@@ -80,7 +80,7 @@ export default function AdminRequestsPage() {
     setLoading(true);
     setStatus("Loading custom requests…");
     try {
-      const res = await authedFetch(`${apiUrl}/api/admin/requests?limit=100`);
+      const res = await authedFetch(`/api/admin/requests?limit=100`);
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.detail || "Could not load requests");
@@ -102,7 +102,7 @@ export default function AdminRequestsPage() {
   async function handleNotifyLocals(requestId: number) {
     setDispatchingId(requestId);
     try {
-      const res = await authedFetch(`${apiUrl}/api/admin/requests/${requestId}/notify-locals`, {
+      const res = await authedFetch(`/api/admin/requests/${requestId}/notify-locals`, {
         method: "POST",
       });
       const data = await res.json();

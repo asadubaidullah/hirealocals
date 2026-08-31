@@ -1,4 +1,4 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -95,20 +95,19 @@ async function liveLocals(){
 
 export default async function Home(){
   const[
-    featured,
     allCities,
     categories,
     locals,
     guides
   ]=await Promise.all([
-    getFeaturedCities(),
     getCities(),
     getServiceCategories(),
     liveLocals(),
     getBlogPosts(),
   ]);
 
-  const cityCards=(featured.length?featured:allCities).slice(0,4);
+  const featured = allCities.filter(c => c.featured);
+  const cityCards = (featured.length ? featured : allCities).slice(0, 4);
 
   const activeCategories=categories
     .filter(category=>category.active!==false)
@@ -122,10 +121,10 @@ export default async function Home(){
     
 
     {/* HERO */}
-    <section className="hal-home-hero hal-home-hero-reference">
+    <section className="hal-home-hero">
       <div className="container hal-home-hero-inner">
-
         <div className="hal-home-hero-copy">
+          <span className="eyebrow">Private Travel Marketplace</span>
           <h1>
             Real people.<br/>
             Real experiences.<br/>
@@ -137,135 +136,81 @@ export default async function Home(){
             private experiences, practical travel help and a more
             personal way to explore.
           </p>
+
+          <div className="hal-home-search">
+            <SearchBar/>
+          </div>
+
+          <div className="hal-home-trustbar">
+            <span>
+              <ShieldCheck size={16}/>
+              Profile review
+            </span>
+            <span>
+              <MessageCircle size={16}/>
+              Direct requests
+            </span>
+            <span>
+              <Star size={16}/>
+              Marketplace reviews
+            </span>
+          </div>
         </div>
 
+        <div className="hal-home-hero-photo">
+          <div className="hal-hero-image-wrapper">
+            <picture>
+              <source
+                type="image/webp"
+                srcSet="/images/home/hero-home-pexels-mobile.webp 750w, /images/home/hero-home-pexels.webp 1600w"
+                sizes="(max-width: 768px) 100vw, 50vw"
+              />
+              <source
+                type="image/jpeg"
+                srcSet="/images/home/hero-home-pexels-mobile.jpg 750w, /images/home/hero-home-pexels.jpg 1600w"
+                sizes="(max-width: 768px) 100vw, 50vw"
+              />
+              <img
+                src="/images/home/hero-home-pexels.jpg"
+                alt="Female traveler exploring London near Big Ben"
+                width={756}
+                height={1008}
+                fetchPriority="high"
+                decoding="async"
+                className="hero-main-img"
+              />
+            </picture>
 
-        <div className="hal-home-hero-photo hal-home-reference-photo">
-
-          <img
-            src="/images/home/hero-home-pexels.jpg"
-            alt="Female traveler exploring London near Big Ben"
-          />
-
-
-          {first&&first.image ?
-             <Link
+            {first&&first.image ? (
+              <Link
                 href={`/locals/${first.slug}`}
-                className="hal-home-floating-local hal-home-floating-local-v2"
+                className="hal-home-floating-local"
               >
-
-                <div className="hal-local-card-status">
-                  <span className="hal-local-status-dot"/>
-                  {first.verified ?
-                     "Verified local"
-                    : "Local profile"
-                  }
-                </div>
-
-
-                <div className="hal-local-card-main">
-
-                  <img
-                    src={first.image}
-                    alt=""
-                    className="hal-local-card-avatar"
-                  />
-
-                  <div className="hal-local-card-identity">
-
+                <img
+                  src={first.image}
+                  alt=""
+                  className="avatar"
+                  width={48}
+                  height={48}
+                />
+                <div className="floating-card-body">
+                  <div className="floating-card-header">
                     <strong>{first.name}</strong>
-
-                    <span>
-                      <MapPin size={12}/>
-                      {first.city}
-                    </span>
-
+                    {first.verified && <span className="verified-badge">✓</span>}
                   </div>
-
+                  <span className="floating-card-sub">
+                    <MapPin size={11}/> {first.city}
+                  </span>
+                  {Number(first.rate) > 0 && (
+                    <span className="floating-card-price">
+                      From <strong>${Number(first.rate).toFixed(0)}</strong> / hr
+                    </span>
+                  )}
                 </div>
-
-
-                {Number(first.rating)>0&&Number(first.reviews)>0 ?
-                   <div className="hal-local-card-rating">
-
-                      <Star
-                        size={13}
-                        fill="currentColor"
-                      />
-
-                      <strong>{first.rating}</strong>
-
-                      <span>
-                        ({first.reviews} reviews)
-                      </span>
-
-                    </div>
-                  : null
-                }
-
-
-                {first.categories?.length ?
-                   <div className="hal-local-card-tags">
-
-                      {first.categories
-                        .slice(0,3)
-                        .map((category:string)=>
-                          <span key={category}>
-                            {category}
-                          </span>
-                        )
-                      }
-
-                    </div>
-                  : null
-                }
-
-
-                {Number(first.rate)>0 ?
-                   <div className="hal-local-card-price">
-
-                      From{" "}
-                      <strong>
-                        ${Number(first.rate).toFixed(0)}
-                      </strong>
-
-                      <span> / hour</span>
-
-                    </div>
-                  : null
-                }
-
               </Link>
-            : null
-          }
-
+            ) : null}
+          </div>
         </div>
-
-
-        <div className="hal-home-search">
-          <SearchBar/>
-        </div>
-
-
-        <div className="hal-home-trustbar">
-
-          <span>
-            <ShieldCheck size={16}/>
-            Profile review
-          </span>
-
-          <span>
-            <MessageCircle size={16}/>
-            Direct requests
-          </span>
-
-          <span>
-            <Star size={16}/>
-            Marketplace reviews
-          </span>
-
-        </div>
-
       </div>
     </section>
 

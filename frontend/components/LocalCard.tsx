@@ -66,7 +66,15 @@ export default function LocalCard({
 
     <Link href={profileHref} className="local-card-link">
       {local.image ?
-         <img className="cover" src={local.image} alt={`${local.name}, local in ${local.city}`}/>
+         <img
+           className="cover"
+           src={local.image}
+           alt={`${local.name}, local in ${local.city}`}
+           loading="lazy"
+           decoding="async"
+           width={320}
+           height={270}
+         />
         : <div className="local-card-image-placeholder"><UserRound size={38}/></div>
       }
 

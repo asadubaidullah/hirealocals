@@ -32,14 +32,12 @@ const securityHeaders = [
   },
   {
     key: "Permissions-Policy",
-    value:
-      "camera=(), microphone=(), geolocation=(self)"
+    value: "camera=(), microphone=(), geolocation=(self)"
   },
   ...(process.env.NODE_ENV === "production"
     ? [{
         key: "Strict-Transport-Security",
-        value:
-          "max-age=31536000; includeSubDomains"
+        value: "max-age=31536000; includeSubDomains"
       }]
     : [])
 ];
@@ -50,16 +48,34 @@ const nextConfig: NextConfig = {
   compress: true,
   output: "standalone",
 
+  images: {
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 86400,
+    deviceSizes: [375, 390, 412, 640, 750, 828, 1080, 1200, 1920],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+  },
+
   allowedDevOrigins: [
     "192.168.1.2",
     "192.168.1.7"
   ],
 
   async headers() {
-    return [{
-      source: "/(.*)",
-      headers: securityHeaders
-    }];
+    return [
+      {
+        source: "/(.*)",
+        headers: securityHeaders
+      },
+      {
+        source: "/images/(.*)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable"
+          }
+        ]
+      }
+    ];
   },
 
   async rewrites() {

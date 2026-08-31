@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from datetime import date, datetime, time, timezone, timedelta
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 import re
 import secrets
 import uuid
@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from sqlmodel import Session, select
+from sqlmodel import Session, select, SQLModel
 from sqlalchemy import or_, func, delete
 
 from .config import settings
@@ -3092,8 +3092,142 @@ def provider_application(
     session.add(application)
     session.commit()
     session.refresh(application)
-    notify_admins(session, "provider_application", "New provider application", f"{application.name} applied from {application.city}.", "/admin")
+    notify_admins(session, "provider_application", "New provider application", f"{application.name} applied from {application.city}.", "/admin/locals")
     return {"ok": True, "id": application.id, "status": application.status}
+
+
+class AdminBadgeClearRequest(SQLModel):
+    category: str = "all"
+
+
+@app.get("/api/admin/activity-badges")
+def admin_activity_badges(
+    admin: Annotated[User, Depends(admin_user)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    unread_notes = session.exec(
+        select(Notification).where(
+            Notification.user_id == admin.id,
+            Notification.read_at == None,
+        )
+    ).all()
+
+    locals_count = sum(
+        1 for n in unread_notes
+        if n.kind in {"provider_application", "kyc_submitted", "verification_document"}
+        or "/admin/locals" in (n.link or "")
+    )
+    requests_count = sum(
+        1 for n in unread_notes
+        if n.kind in {"custom_request", "request_submitted", "trip_request"}
+        or "/admin/requests" in (n.link or "")
+    )
+    reviews_count = sum(
+        1 for n in unread_notes
+        if n.kind in {"review_reported", "review_flagged", "new_review"}
+        or "/admin/reviews" in (n.link or "")
+    )
+    support_count = sum(
+        1 for n in unread_notes
+        if n.kind in {"support_message"}
+        or "/admin/support" in (n.link or "")
+    )
+    total_unread = len(unread_notes)
+
+    return {
+        "total": total_unread,
+        "locals": locals_count,
+        "requests": requests_count,
+        "reviews": reviews_count,
+        "support": support_count,
+        "notifications": total_unread,
+    }
+
+
+@app.post("/api/admin/activity-badges/clear")
+def admin_activity_badges_clear(
+    payload: AdminBadgeClearRequest,
+    admin: Annotated[User, Depends(admin_user)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    unread_notes = session.exec(
+        select(Notification).where(
+            Notification.user_id == admin.id,
+            Notification.read_at == None,
+        )
+    ).all()
+
+    now = datetime.now(timezone.utc)
+    cat = payload.category.lower().strip()
+
+    updated = 0
+    for n in unread_notes:
+        match = False
+        if cat in {"all", "notifications"}:
+            match = True
+        elif cat in {"locals", "provider-applications", "kyc"} and (
+            n.kind in {"provider_application", "kyc_submitted", "verification_document"}
+            or "/admin/locals" in (n.link or "")
+            or "/admin" == (n.link or "").strip()
+        ):
+            match = True
+        elif cat in {"requests", "custom-requests"} and (
+            n.kind in {"custom_request", "request_submitted", "trip_request"}
+            or "/admin/requests" in (n.link or "")
+        ):
+            match = True
+        elif cat in {"reviews"} and (
+            n.kind in {"review_reported", "review_flagged", "new_review"}
+            or "/admin/reviews" in (n.link or "")
+        ):
+            match = True
+        elif cat in {"support"} and (
+            n.kind in {"support_message"}
+            or "/admin/support" in (n.link or "")
+        ):
+            match = True
+
+        if match:
+            n.read_at = now
+            session.add(n)
+            updated += 1
+
+    if updated > 0:
+        session.commit()
+
+    remaining = session.exec(
+        select(Notification).where(
+            Notification.user_id == admin.id,
+            Notification.read_at == None,
+        )
+    ).all()
+
+    return {
+        "ok": True,
+        "cleared": updated,
+        "total": len(remaining),
+        "locals": sum(
+            1 for n in remaining
+            if n.kind in {"provider_application", "kyc_submitted", "verification_document"}
+            or "/admin/locals" in (n.link or "")
+        ),
+        "requests": sum(
+            1 for n in remaining
+            if n.kind in {"custom_request", "request_submitted", "trip_request"}
+            or "/admin/requests" in (n.link or "")
+        ),
+        "reviews": sum(
+            1 for n in remaining
+            if n.kind in {"review_reported", "review_flagged", "new_review"}
+            or "/admin/reviews" in (n.link or "")
+        ),
+        "support": sum(
+            1 for n in remaining
+            if n.kind in {"support_message"}
+            or "/admin/support" in (n.link or "")
+        ),
+        "notifications": len(remaining),
+    }
 
 
 @app.get("/api/admin/provider-applications")
@@ -5712,6 +5846,14 @@ def create_custom_request(
                 "/local-dashboard/opportunities",
                 email=False,
             )
+
+    notify_admins(
+        session,
+        "custom_request",
+        f"New custom request #{trip_req.id}",
+        f"{user.full_name} submitted a custom request in {trip_req.city_name}.",
+        "/admin/requests",
+    )
 
     audit_event(
         session,
