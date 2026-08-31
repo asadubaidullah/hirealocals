@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import {
@@ -9,6 +9,7 @@ import {
   LogOut,
   MessageCircle,
   Search,
+  Sparkles,
   Star,
   UserRound,
 } from "lucide-react";
@@ -32,6 +33,11 @@ const links = [
     label: "My bookings",
     href: "/dashboard/bookings",
     icon: CalendarDays,
+  },
+  {
+    label: "Custom requests",
+    href: "/dashboard/requests",
+    icon: Sparkles,
   },
   {
     label: "Messages",
@@ -61,11 +67,11 @@ const links = [
 ] as const;
 
 const mobileLinks = [
-  links[0],
-  links[1],
-  links[2],
-  links[4],
-  links[6],
+  links[0], // Overview
+  links[1], // My bookings
+  links[2], // Custom requests
+  links[3], // Messages
+  links[5], // Saved locals
 ];
 
 export default function TravelerSidebar({
@@ -169,11 +175,13 @@ export default function TravelerSidebar({
           >
             <Icon size={20} />
             <span>
-              {label === "My bookings"
+              {(label as string) === "My bookings"
                 ? "Bookings"
-                : label === "Saved locals"
-                  ? "Saved"
-                  : label}
+                : (label as string) === "Custom requests"
+                  ? "Requests"
+                  : (label as string) === "Saved locals"
+                    ? "Saved"
+                    : label}
             </span>
           </Link>
         ))}

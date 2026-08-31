@@ -427,3 +427,50 @@ class PaymentWebhookEvent(SQLModel, table=True):
     status: str = Field(default="processed", index=True, max_length=30)
     last_error: str = Field(default="", max_length=1000)
     processed_at: datetime = Field(default_factory=utcnow)
+
+
+class TripRequest(SQLModel, table=True):
+    """Custom traveler demand captured when direct marketplace match is unavailable."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tourist_user_id: int = Field(foreign_key="user.id", index=True)
+    country_code: str = Field(default="GB", index=True, max_length=2)
+    city_name: str = Field(index=True, max_length=120)
+    city_slug: str = Field(index=True, max_length=120)
+    booking_date: str = Field(index=True, max_length=20)
+    flexible_dates: bool = Field(default=False)
+    date_end: Optional[str] = Field(default=None, max_length=20)
+    preferred_time: str = Field(default="morning", max_length=30)
+    duration_hours: float = Field(default=3.0)
+    guests: int = Field(default=1)
+    category: str = Field(default="Custom Experience", index=True, max_length=80)
+    title: str = Field(default="", max_length=180)
+    description: str = Field(default="", max_length=4000)
+    interests: str = Field(default="", max_length=500)
+    language_preference: str = Field(default="English", max_length=120)
+    budget_amount: Optional[float] = Field(default=None)
+    budget_currency: str = Field(default="USD", max_length=8)
+    special_requirements: str = Field(default="", max_length=2000)
+    meeting_preference: str = Field(default="", max_length=300)
+    status: str = Field(default="submitted", index=True, max_length=30)
+    selected_offer_id: Optional[int] = Field(default=None, index=True)
+    converted_booking_id: Optional[int] = Field(default=None, foreign_key="booking.id", index=True)
+    expires_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=utcnow, index=True)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class RequestOffer(SQLModel, table=True):
+    """Tailored price and itinerary quote submitted by a verified Local Partner."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    trip_request_id: int = Field(foreign_key="triprequest.id", index=True)
+    local_profile_id: int = Field(foreign_key="localprofile.id", index=True)
+    offered_price: float = Field(default=0.0, gt=0)
+    currency: str = Field(default="USD", max_length=8)
+    duration_hours: float = Field(default=3.0)
+    proposed_start_time: str = Field(default="10:00", max_length=10)
+    proposal_message: str = Field(default="", max_length=4000)
+    inclusions: str = Field(default="", max_length=1000)
+    status: str = Field(default="submitted", index=True, max_length=30)
+    created_at: datetime = Field(default_factory=utcnow, index=True)
+    updated_at: datetime = Field(default_factory=utcnow)
+

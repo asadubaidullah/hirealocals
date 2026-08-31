@@ -1,9 +1,11 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   CalendarDays,
   RefreshCw,
+  Sparkles,
   UsersRound
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
@@ -593,9 +595,30 @@ export default function ExploreClient(){
     {!loading&&
      !error&&
      !items.length&&
-      <div className="empty">
-        No locals match these filters yet.
-        Try another city, service or price range.
+      <div className="explore-request-bridge-card" role="region" aria-label="Request a Local">
+        <div className="bridge-icon">
+          <Sparkles size={28} />
+        </div>
+        <div className="bridge-content">
+          <h3>Can&apos;t find the exact match{city ? ` in ${city}` : ""}?</h3>
+          <p>
+            Tell us what you need and verified local experts{city ? ` in ${city}` : ""} will send you tailored proposals directly to your dashboard.
+          </p>
+          <div className="bridge-actions">
+            <Link
+              href={`/request-a-local?${new URLSearchParams({
+                ...(city ? { city } : {}),
+                ...(service ? { category: service } : {}),
+                ...(tripDate ? { date: tripDate } : {}),
+                ...(tripGuests && tripGuests !== "1" ? { guests: tripGuests } : {}),
+                ...(maxRate ? { max_rate: maxRate } : {}),
+              }).toString()}`}
+              className="btn primary"
+            >
+              Request a Local {city ? `in ${city}` : ""} &rarr;
+            </Link>
+          </div>
+        </div>
       </div>
     }
 

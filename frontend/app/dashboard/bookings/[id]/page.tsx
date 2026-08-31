@@ -1,14 +1,15 @@
 "use client";
 import Link from "next/link";
 import { FormEvent,useEffect,useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { authedFetch } from "@/lib/api";
 
 type Meeting={meeting_point_name:string;meeting_address:string;meeting_instructions:string;latitude?:number|null;longitude?:number|null};
 type Payment={provider:string;mode:string;required:boolean;currency:string;status:string;amount_total:number|null;platform_fee:number|null;refunded_amount:number;paid_at?:string|null};
 type Booking={id:number;booking_date:string;start_time:string;end_time:string;guests:number;hours:number;message:string;subtotal:number;platform_fee:number;total:number;status:string;local_name:string;local_slug:string;local_headline:string;local_city:string;local_image:string;service_title:string;service_category:string;message_count:number;meeting_point:Meeting;timeline:any[];review:any;payment:Payment};
 export default function Page(){
- const params=useParams<{id:string}>();const id=Number(params.id);const [b,setB]=useState<Booking|null>(null);const [status,setStatus]=useState('Loading booking…');const [busy,setBusy]=useState(false);const [meeting,setMeeting]=useState<Meeting>({meeting_point_name:'',meeting_address:'',meeting_instructions:''});
+ const params=useParams<{id:string}>();const searchParams=useSearchParams();const paymentParam=searchParams.get("payment");const id=Number(params.id);const [b,setB]=useState<Booking|null>(null);const [status,setStatus]=useState('Loading booking…');const [busy,setBusy]=useState(false);const [meeting,setMeeting]=useState<Meeting>({meeting_point_name:'',meeting_address:'',meeting_instructions:''});
  async function load(){const r=await authedFetch(`/api/traveler/bookings/${id}`);const d=await r.json().catch(()=>({}));if(!r.ok){setStatus(d.detail||'Could not load booking');return}setB(d);setMeeting(d.meeting_point||{meeting_point_name:'',meeting_address:'',meeting_instructions:''});setStatus('')}
  useEffect(()=>{if(id)load()},[id]);
  async function cancel(){if(!confirm('Cancel this booking request?'))return;setBusy(true);const r=await authedFetch(`/api/traveler/bookings/${id}/cancel`,{method:'PATCH'});const d=await r.json().catch(()=>({}));if(!r.ok){setStatus(d.detail||'Could not cancel booking')}else await load();setBusy(false)}
@@ -18,7 +19,32 @@ export default function Page(){
  if(!b)return <>{status&&<div className="notice">{status}</div>}</>;
  const payment=b.payment||{provider:'manual',mode:'manual',required:false,currency:'USD',status:'manual',amount_total:null,platform_fee:null,refunded_amount:0};
  const paid=payment.status==='paid'; const canPay=payment.required&&b.status==='confirmed'&&!paid&&!['refunded','refund_pending'].includes(payment.status);
- return <><div className="detail-breadcrumb"><Link href="/dashboard/bookings">← My bookings</Link><span>Booking #{b.id}</span></div><div className="booking-detail-head"><div><div className="status-stack"><span className={`badge status-${b.status}`}>{b.status}</span><span className={`badge payment-${payment.status}`}>{paymentLabel(payment.status)}</span></div><h2>{b.service_title}</h2><p className="muted">Booking with {b.local_name} in {b.local_city}</p></div><strong className="booking-detail-total">${b.total.toFixed(2)}</strong></div>{status&&<div className="notice">{status}</div>}
+ return <><div className="detail-breadcrumb"><Link href="/dashboard/bookings">← My bookings</Link><span>Booking #{b.id}</span></div>
+ {paymentParam==='success'&&(
+  <div className="payment-return-banner payment-return-success" role="status">
+   <div className="payment-return-icon"><CheckCircle2 size={24}/></div>
+   <div className="payment-return-content">
+    <strong>Payment confirmed — your experience is booked!</strong>
+    <p>Your payment of ${b.total.toFixed(2)} has been received. Your booking with {b.local_name} in {b.local_city} is confirmed.</p>
+    {b.meeting_point?.meeting_point_name&&(
+     <div className="payment-return-meeting">
+      <span>Meeting point: <strong>{b.meeting_point.meeting_point_name}</strong></span>
+      {b.meeting_point.meeting_address&&<span> · {b.meeting_point.meeting_address}</span>}
+     </div>
+    )}
+   </div>
+  </div>
+ )}
+ {paymentParam==='cancelled'&&(
+  <div className="payment-return-banner payment-return-cancelled" role="status">
+   <div className="payment-return-icon"><AlertCircle size={24}/></div>
+   <div className="payment-return-content">
+    <strong>Payment checkout was cancelled</strong>
+    <p>Your booking remains confirmed. You can pay securely whenever you are ready before your scheduled trip.</p>
+   </div>
+  </div>
+ )}
+ <div className="booking-detail-head"><div><div className="status-stack"><span className={`badge status-${b.status}`}>{b.status}</span><span className={`badge payment-${payment.status}`}>{paymentLabel(payment.status)}</span></div><h2>{b.service_title}</h2><p className="muted">Booking with {b.local_name} in {b.local_city}</p></div><strong className="booking-detail-total">${b.total.toFixed(2)}</strong></div>{status&&<div className="notice">{status}</div>}
  <div className="booking-detail-grid"><section><article className="detail-card local-summary-card"><Link href={`/locals/${b.local_slug}`}><img src={b.local_image} alt={b.local_name}/></Link><div><Link href={`/locals/${b.local_slug}`}><h3>{b.local_name}</h3></Link><p>{b.local_headline}</p><span className="muted">{b.local_city}</span></div></article>
  <article className="detail-card"><h3>Trip details</h3><div className="detail-facts"><span><strong>Date</strong>{b.booking_date}</span><span><strong>Time</strong>{b.start_time}–{b.end_time}</span><span><strong>Duration</strong>{b.hours} hours</span><span><strong>Guests</strong>{b.guests}</span><span><strong>Category</strong>{b.service_category}</span><span><strong>Booking ID</strong>#{b.id}</span></div>{b.message&&<div className="traveler-note"><strong>Your note to the local</strong><p>{b.message}</p></div>}</article>
  <article className="detail-card payment-card"><div className="payment-card-head"><div><h3>Payment</h3><p className="muted">{payment.required?('Secure payment is handled by Safepay after the local confirms your request.'):'This environment is using manual payment mode.'}</p></div><span className={`badge payment-${payment.status}`}>{paymentLabel(payment.status)}</span></div><div className="payment-facts"><span><strong>Provider</strong>{payment.required?'Safepay Hosted Checkout':'Manual'}</span><span><strong>Currency</strong>{payment.currency||'USD'}</span><span><strong>Total</strong>${b.total.toFixed(2)}</span><span><strong>Refunded</strong>${(payment.refunded_amount||0).toFixed(2)}</span></div>{canPay&&<button className="btn" onClick={pay} disabled={busy}>{busy?'Opening checkout…':`Pay $${b.total.toFixed(2)} securely`}</button>}{payment.required&&b.status==='pending'&&<div className="notice">Payment unlocks after the local accepts this booking.</div>}{paid&&<div className="notice">Payment confirmed. Your local can complete the booking after the experience.</div>}{payment.status==='refunded'&&<div className="notice">This payment has been refunded.</div>}</article>

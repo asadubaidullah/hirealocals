@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -12,6 +12,7 @@ import {
   LogOut,
   Menu,
   MessageCircle,
+  Sparkles,
   UserRound,
   WalletCards,
   X,
@@ -42,6 +43,11 @@ const links = [
     label: "Booking requests",
     href: "/local-dashboard/bookings",
     icon: CalendarCheck2,
+  },
+  {
+    label: "Opportunities",
+    href: "/local-dashboard/opportunities",
+    icon: Sparkles,
   },
   {
     label: "Services",
@@ -83,17 +89,18 @@ const links = [
 
 const mobilePrimaryLinks = [
   links[0], // Overview
-  links[1], // Requests
-  links[3], // Availability
-  links[4], // Messages
+  links[1], // Booking requests
+  links[2], // Opportunities
+  links[5], // Messages
 ] as const;
 
 
 const mobileMoreLinks = [
-  links[2], // Services
-  links[5], // Notifications
-  links[6], // Earnings
-  links[7], // Profile
+  links[3], // Services
+  links[4], // Availability
+  links[6], // Notifications
+  links[7], // Earnings
+  links[8], // Profile
 ] as const;
 
 
@@ -449,13 +456,15 @@ export default function LocalSidebar({
 
                       <small>
                         {
-                          label === "Services"
+                          (label as string) === "Services"
                             ? "Manage what travelers can book"
-                            : label === "Notifications"
-                              ? "Updates and account activity"
-                              : label === "Earnings"
-                                ? "Booking value and earnings"
-                                : "Public profile and account details"
+                            : (label as string) === "Availability"
+                              ? "Manage schedule and hours"
+                              : (label as string) === "Notifications"
+                                ? "Updates and account activity"
+                                : (label as string) === "Earnings"
+                                  ? "Booking value and earnings"
+                                  : "Public profile and account details"
                         }
                       </small>
                     </span>

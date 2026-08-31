@@ -268,3 +268,33 @@ class PaymentRefundInput(BaseModel):
 class LaunchTaskUpdate(BaseModel):
     done: bool
     note: str = Field(default="", max_length=2000)
+
+
+class TripRequestInput(BaseModel):
+    city_name: str = Field(min_length=2, max_length=120)
+    country_code: str = Field(default="GB", min_length=2, max_length=2)
+    booking_date: str = Field(min_length=8, max_length=20)
+    flexible_dates: bool = False
+    date_end: Optional[str] = Field(default=None, max_length=20)
+    preferred_time: str = Field(default="morning", max_length=30)
+    duration_hours: float = Field(default=3.0, ge=1.0, le=24.0)
+    guests: int = Field(default=1, ge=1, le=50)
+    category: str = Field(default="Custom Experience", max_length=80)
+    title: str = Field(default="", max_length=180)
+    description: str = Field(min_length=10, max_length=4000)
+    interests: str = Field(default="", max_length=500)
+    language_preference: str = Field(default="English", max_length=120)
+    budget_amount: Optional[float] = Field(default=None, ge=0.0)
+    budget_currency: str = Field(default="USD", max_length=8)
+    special_requirements: str = Field(default="", max_length=2000)
+    meeting_preference: str = Field(default="", max_length=300)
+
+
+class RequestOfferInput(BaseModel):
+    offered_price: float = Field(gt=0, le=100000)
+    currency: str = Field(default="USD", max_length=8)
+    duration_hours: float = Field(default=3.0, ge=1.0, le=24.0)
+    proposed_start_time: str = Field(default="10:00", max_length=10)
+    proposal_message: str = Field(min_length=10, max_length=4000)
+    inclusions: str = Field(default="", max_length=1000)
+

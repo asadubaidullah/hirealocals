@@ -53,6 +53,8 @@ from .models import (
     PaymentRecord,
     UserConsent,
     LaunchTask,
+    TripRequest,
+    RequestOffer,
 )
 from .schemas import (
     RegisterInput,
@@ -86,6 +88,8 @@ from .schemas import (
     ServiceCategoryInput,
     ServiceCategoryUpdate,
     LaunchTaskUpdate,
+    TripRequestInput,
+    RequestOfferInput,
 )
 from .security import hash_password, verify_password, create_access_token, current_user, admin_user
 from .didit_kyc import router as didit_kyc_router
@@ -1232,6 +1236,7 @@ def create_booking(
     if local.user_id:
         add_notification(session, local.user_id, "booking_request", f"New booking request #{booking.id}", f"{user.full_name} requested {booking.booking_date} at {booking.start_time}.", "/local-dashboard/bookings", email=True)
     audit_event(session, user.id, "booking.created", "booking", booking.id, f"Booking requested for local #{local.id}", request)
+    session.refresh(booking)
     return booking
 
 
@@ -2116,6 +2121,7 @@ def local_booking_status(
     session.commit()
     session.refresh(booking)
     add_notification(session, booking.tourist_user_id, "booking_status", f"Booking #{booking.id} is {booking.status}", f"Your booking for {booking.booking_date} at {booking.start_time} was marked {booking.status}.", f"/dashboard/bookings/{booking.id}", email=True)
+    session.refresh(booking)
     return booking
 
 
@@ -3977,3 +3983,597 @@ def admin_site_content_update(
 
 # Didit hosted Local identity verification
 app.include_router(didit_kyc_router)
+
+
+# ============================================================================
+# POINT 4: REQUEST-A-LOCAL (DEMAND CAPTURE, MATCHING & CONVERSION)
+# ============================================================================
+
+def _hal_is_local_eligible(session: Session, profile: LocalProfile) -> bool:
+    return bool(profile.verified or local_kyc_approved(session, profile))
+
+
+def _hal_offer_dict(session: Session, offer: RequestOffer) -> dict:
+    local = session.get(LocalProfile, offer.local_profile_id)
+    return {
+        "id": offer.id,
+        "trip_request_id": offer.trip_request_id,
+        "local_profile_id": offer.local_profile_id,
+        "local_name": local.display_name if local else "Local Partner",
+        "local_slug": local.slug if local else "",
+        "local_image": local.image_url if local else "",
+        "local_city": local.city_name if local else "",
+        "local_rating": local.rating if local else 0.0,
+        "local_review_count": local.review_count if local else 0,
+        "local_hourly_rate": local.hourly_rate if local else 30.0,
+        "local_verified": _hal_is_local_eligible(session, local) if local else False,
+        "offered_price": offer.offered_price,
+        "currency": offer.currency,
+        "duration_hours": offer.duration_hours,
+        "proposed_start_time": offer.proposed_start_time,
+        "proposal_message": offer.proposal_message,
+        "inclusions": offer.inclusions,
+        "status": offer.status,
+        "created_at": offer.created_at.isoformat() if offer.created_at else "",
+        "updated_at": offer.updated_at.isoformat() if offer.updated_at else "",
+    }
+
+
+def _hal_request_dict(session: Session, req: TripRequest, include_offers: bool = True) -> dict:
+    offers_data = []
+    if include_offers:
+        offers = session.exec(
+            select(RequestOffer)
+            .where(RequestOffer.trip_request_id == req.id)
+            .order_by(RequestOffer.created_at.asc())
+        ).all()
+        offers_data = [_hal_offer_dict(session, o) for o in offers]
+
+    traveler = session.get(User, req.tourist_user_id)
+
+    return {
+        "id": req.id,
+        "tourist_user_id": req.tourist_user_id,
+        "traveler_name": traveler.full_name if traveler else "Traveler",
+        "traveler_email": traveler.email if traveler else "",
+        "country_code": req.country_code,
+        "city_name": req.city_name,
+        "city_slug": req.city_slug,
+        "booking_date": req.booking_date,
+        "flexible_dates": req.flexible_dates,
+        "date_end": req.date_end,
+        "preferred_time": req.preferred_time,
+        "duration_hours": req.duration_hours,
+        "guests": req.guests,
+        "category": req.category,
+        "title": req.title,
+        "description": req.description,
+        "interests": req.interests,
+        "language_preference": req.language_preference,
+        "budget_amount": req.budget_amount,
+        "budget_currency": req.budget_currency,
+        "special_requirements": req.special_requirements,
+        "meeting_preference": req.meeting_preference,
+        "status": req.status,
+        "selected_offer_id": req.selected_offer_id,
+        "converted_booking_id": req.converted_booking_id,
+        "offer_count": len(offers_data) if include_offers else len(session.exec(select(RequestOffer.id).where(RequestOffer.trip_request_id == req.id)).all()),
+        "offers": offers_data,
+        "expires_at": req.expires_at.isoformat() if req.expires_at else None,
+        "created_at": req.created_at.isoformat() if req.created_at else "",
+        "updated_at": req.updated_at.isoformat() if req.updated_at else "",
+    }
+
+
+@app.post("/api/requests")
+def create_custom_request(
+    payload: TripRequestInput,
+    request: Request,
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    enforce_rate_limit(session, request, "request_create", 20, 3600, str(user.id))
+
+    clean_city = payload.city_name.strip()
+    c_slug = slugify(clean_city)
+
+    trip_req = TripRequest(
+        tourist_user_id=user.id,
+        country_code=(payload.country_code or "GB").strip().upper(),
+        city_name=clean_city,
+        city_slug=c_slug,
+        booking_date=payload.booking_date.strip(),
+        flexible_dates=payload.flexible_dates,
+        date_end=payload.date_end.strip() if payload.date_end else None,
+        preferred_time=payload.preferred_time.strip() or "morning",
+        duration_hours=payload.duration_hours,
+        guests=payload.guests,
+        category=payload.category.strip() or "Custom Experience",
+        title=payload.title.strip() or f"{payload.category} in {clean_city}",
+        description=payload.description.strip(),
+        interests=payload.interests.strip(),
+        language_preference=payload.language_preference.strip() or "English",
+        budget_amount=payload.budget_amount,
+        budget_currency=payload.budget_currency.strip() or "USD",
+        special_requirements=payload.special_requirements.strip(),
+        meeting_preference=payload.meeting_preference.strip(),
+        status="submitted",
+    )
+
+    session.add(trip_req)
+    session.commit()
+    session.refresh(trip_req)
+
+    # Find matching verified locals and queue notifications
+    candidate_locals = session.exec(
+        select(LocalProfile).where(
+            or_(
+                LocalProfile.city_slug == c_slug,
+                LocalProfile.country_code == trip_req.country_code,
+            )
+        )
+    ).all()
+
+    for cand in candidate_locals:
+        if _hal_is_local_eligible(session, cand) and cand.user_id and cand.user_id != user.id:
+            add_notification(
+                session,
+                cand.user_id,
+                "opportunity_new",
+                f"New opportunity in {trip_req.city_name}",
+                f"{user.full_name} is looking for a local on {trip_req.booking_date} ({trip_req.category}). Submit a quote to win this trip!",
+                "/local-dashboard/opportunities",
+                email=True,
+            )
+
+    audit_event(
+        session,
+        user.id,
+        "request.created",
+        "trip_request",
+        trip_req.id,
+        f"Created custom request for {trip_req.city_name} on {trip_req.booking_date}",
+        request,
+    )
+
+    return _hal_request_dict(session, trip_req, include_offers=True)
+
+
+@app.get("/api/traveler/requests")
+def list_traveler_requests(
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    reqs = session.exec(
+        select(TripRequest)
+        .where(TripRequest.tourist_user_id == user.id)
+        .order_by(TripRequest.created_at.desc())
+    ).all()
+    return [_hal_request_dict(session, r, include_offers=True) for r in reqs]
+
+
+@app.get("/api/traveler/requests/{request_id}")
+def get_traveler_request_detail(
+    request_id: int,
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    req = session.get(TripRequest, request_id)
+    if not req:
+        raise HTTPException(404, "Trip request not found")
+    if req.tourist_user_id != user.id and user.role != "admin":
+        raise HTTPException(403, "You do not own this request")
+    return _hal_request_dict(session, req, include_offers=True)
+
+
+@app.patch("/api/traveler/requests/{request_id}/cancel")
+def cancel_traveler_request(
+    request_id: int,
+    request: Request,
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    req = session.get(TripRequest, request_id)
+    if not req:
+        raise HTTPException(404, "Trip request not found")
+    if req.tourist_user_id != user.id and user.role != "admin":
+        raise HTTPException(403, "You do not own this request")
+    if req.status == "converted_to_booking":
+        raise HTTPException(409, "Cannot cancel a request that has already been converted to a booking")
+
+    req.status = "cancelled"
+    req.updated_at = datetime.now(timezone.utc)
+    session.add(req)
+
+    # Transition open offers to declined
+    offers = session.exec(
+        select(RequestOffer).where(
+            RequestOffer.trip_request_id == req.id,
+            RequestOffer.status == "submitted",
+        )
+    ).all()
+    for o in offers:
+        o.status = "declined"
+        o.updated_at = datetime.now(timezone.utc)
+        session.add(o)
+
+    session.commit()
+    audit_event(session, user.id, "request.cancelled", "trip_request", req.id, f"Cancelled custom request #{req.id}", request)
+    return {"ok": True, "status": "cancelled"}
+
+
+@app.get("/api/local/requests")
+def list_local_opportunities(
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    profile = require_local_profile(user, session)
+    if not _hal_is_local_eligible(session, profile):
+        raise HTTPException(403, "KYC verified approval required to access marketplace opportunities")
+
+    open_reqs = session.exec(
+        select(TripRequest).where(
+            or_(
+                TripRequest.city_slug == profile.city_slug,
+                TripRequest.country_code == profile.country_code,
+            ),
+            TripRequest.status.in_(["submitted", "matching", "offers_received"]),
+        ).order_by(TripRequest.created_at.desc())
+    ).all()
+
+    results = []
+    for r in open_reqs:
+        # Check if local submitted an offer for this request
+        my_offer = session.exec(
+            select(RequestOffer).where(
+                RequestOffer.trip_request_id == r.id,
+                RequestOffer.local_profile_id == profile.id,
+            )
+        ).first()
+
+        item = _hal_request_dict(session, r, include_offers=False)
+        item["my_offer"] = _hal_offer_dict(session, my_offer) if my_offer else None
+        results.append(item)
+
+    return results
+
+
+@app.get("/api/local/requests/{request_id}")
+def get_local_opportunity_detail(
+    request_id: int,
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    profile = require_local_profile(user, session)
+    if not _hal_is_local_eligible(session, profile):
+        raise HTTPException(403, "KYC verified approval required to access marketplace opportunities")
+
+    r = session.get(TripRequest, request_id)
+    if not r:
+        raise HTTPException(404, "Trip request not found")
+
+    my_offer = session.exec(
+        select(RequestOffer).where(
+            RequestOffer.trip_request_id == r.id,
+            RequestOffer.local_profile_id == profile.id,
+        )
+    ).first()
+
+    item = _hal_request_dict(session, r, include_offers=False)
+    item["my_offer"] = _hal_offer_dict(session, my_offer) if my_offer else None
+    return item
+
+
+@app.post("/api/local/requests/{request_id}/offers")
+def submit_local_quote(
+    request_id: int,
+    payload: RequestOfferInput,
+    request: Request,
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    profile = require_local_profile(user, session)
+    if not _hal_is_local_eligible(session, profile):
+        raise HTTPException(403, "KYC verified approval required to submit quotes")
+
+    trip_req = session.get(TripRequest, request_id)
+    if not trip_req:
+        raise HTTPException(404, "Trip request not found")
+    if trip_req.status not in ["submitted", "matching", "offers_received"]:
+        raise HTTPException(400, f"Request is not open for offers (status: {trip_req.status})")
+
+    # Check for existing quote
+    existing = session.exec(
+        select(RequestOffer).where(
+            RequestOffer.trip_request_id == trip_req.id,
+            RequestOffer.local_profile_id == profile.id,
+            RequestOffer.status.in_(["submitted", "accepted"]),
+        )
+    ).first()
+    if existing:
+        raise HTTPException(409, "You already have an active quote submitted for this request")
+
+    offer = RequestOffer(
+        trip_request_id=trip_req.id,
+        local_profile_id=profile.id,
+        offered_price=round(payload.offered_price, 2),
+        currency=payload.currency.strip() or "USD",
+        duration_hours=payload.duration_hours,
+        proposed_start_time=payload.proposed_start_time.strip() or "10:00",
+        proposal_message=payload.proposal_message.strip(),
+        inclusions=payload.inclusions.strip(),
+        status="submitted",
+    )
+    session.add(offer)
+
+    if trip_req.status in ["submitted", "matching"]:
+        trip_req.status = "offers_received"
+        trip_req.updated_at = datetime.now(timezone.utc)
+        session.add(trip_req)
+
+    session.commit()
+    session.refresh(offer)
+
+    # Notify traveler
+    add_notification(
+        session,
+        trip_req.tourist_user_id,
+        "offer_received",
+        f"New quote from {profile.display_name} for your {trip_req.city_name} trip!",
+        f"{profile.display_name} submitted a custom quote of ${offer.offered_price:.2f} for your trip on {trip_req.booking_date}.",
+        "/dashboard/requests",
+        email=True,
+    )
+
+    audit_event(
+        session,
+        user.id,
+        "request.offer_submitted",
+        "request_offer",
+        offer.id,
+        f"Local {profile.display_name} quoted ${offer.offered_price:.2f} on request #{trip_req.id}",
+        request,
+    )
+
+    return _hal_offer_dict(session, offer)
+
+
+@app.patch("/api/local/offers/{offer_id}/withdraw")
+def withdraw_local_quote(
+    offer_id: int,
+    request: Request,
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    profile = require_local_profile(user, session)
+    offer = session.get(RequestOffer, offer_id)
+    if not offer:
+        raise HTTPException(404, "Quote not found")
+    if offer.local_profile_id != profile.id and user.role != "admin":
+        raise HTTPException(403, "You do not own this quote")
+    if offer.status == "accepted":
+        raise HTTPException(409, "Cannot withdraw an accepted quote")
+
+    offer.status = "withdrawn"
+    offer.updated_at = datetime.now(timezone.utc)
+    session.add(offer)
+    session.commit()
+
+    audit_event(session, user.id, "request.offer_withdrawn", "request_offer", offer.id, f"Withdrew quote #{offer.id}", request)
+    return {"ok": True, "status": "withdrawn"}
+
+
+@app.post("/api/traveler/requests/{request_id}/accept/{offer_id}")
+def accept_request_offer(
+    request_id: int,
+    offer_id: int,
+    request: Request,
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    trip_req = session.get(TripRequest, request_id)
+    if not trip_req:
+        raise HTTPException(404, "Trip request not found")
+    if trip_req.tourist_user_id != user.id and user.role != "admin":
+        raise HTTPException(403, "You do not own this trip request")
+    if trip_req.status == "converted_to_booking" or trip_req.converted_booking_id:
+        raise HTTPException(409, "This request has already been converted to a booking")
+    if trip_req.status == "cancelled":
+        raise HTTPException(400, "Cannot accept an offer on a cancelled request")
+
+    offer = session.get(RequestOffer, offer_id)
+    if not offer or offer.trip_request_id != trip_req.id:
+        raise HTTPException(404, "Offer not found for this request")
+    if offer.status != "submitted":
+        raise HTTPException(409, f"Offer cannot be accepted in status '{offer.status}'")
+
+    local = session.get(LocalProfile, offer.local_profile_id)
+    if not local:
+        raise HTTPException(404, "Local profile not found for this offer")
+
+    # 1. Update accepted offer status
+    offer.status = "accepted"
+    offer.updated_at = datetime.now(timezone.utc)
+    session.add(offer)
+
+    # 2. Decline competing offers
+    competing = session.exec(
+        select(RequestOffer).where(
+            RequestOffer.trip_request_id == trip_req.id,
+            RequestOffer.id != offer.id,
+            RequestOffer.status == "submitted",
+        )
+    ).all()
+    for comp in competing:
+        comp.status = "declined"
+        comp.updated_at = datetime.now(timezone.utc)
+        session.add(comp)
+        comp_local = session.get(LocalProfile, comp.local_profile_id)
+        if comp_local and comp_local.user_id:
+            add_notification(
+                session,
+                comp_local.user_id,
+                "offer_declined",
+                f"Opportunity update: {trip_req.city_name}",
+                f"The traveler selected another quote for the trip on {trip_req.booking_date}.",
+                "/local-dashboard/opportunities",
+                email=False,
+            )
+
+    # 3. Create standard Booking
+    subtotal = round(offer.offered_price, 2)
+    fee_setting = get_setting(session, "platform_fee_percent") or "12"
+    try:
+        fee_percent = float(fee_setting)
+    except Exception:
+        fee_percent = 12.0
+    platform_fee = round(subtotal * (fee_percent / 100.0), 2)
+
+    booking = Booking(
+        tourist_user_id=trip_req.tourist_user_id,
+        local_profile_id=offer.local_profile_id,
+        service_id=None,
+        booking_date=trip_req.booking_date,
+        start_time=offer.proposed_start_time,
+        guests=trip_req.guests,
+        hours=offer.duration_hours,
+        message=f"Custom Request: {trip_req.title or trip_req.category}\n\nTraveler Requirements:\n{trip_req.description}\n\nAccepted Local Proposal:\n{offer.proposal_message}",
+        subtotal=subtotal,
+        platform_fee=platform_fee,
+        status="confirmed",
+    )
+    session.add(booking)
+    session.flush()
+
+    # 4. Create BookingDetail and event log
+    detail = BookingDetail(
+        booking_id=booking.id,
+        meeting_point_name=trip_req.meeting_preference or f"Agreed with {local.display_name}",
+        meeting_address=trip_req.city_name,
+        meeting_instructions=trip_req.special_requirements or "",
+        updated_by_user_id=user.id,
+    )
+    session.add(detail)
+    log_booking_event(
+        session,
+        booking,
+        user.id,
+        "requested",
+        "",
+        "confirmed",
+        f"Converted from Custom Request #{trip_req.id} (Accepted Offer #{offer.id})",
+    )
+
+    # 5. Link TripRequest
+    trip_req.status = "converted_to_booking"
+    trip_req.selected_offer_id = offer.id
+    trip_req.converted_booking_id = booking.id
+    trip_req.updated_at = datetime.now(timezone.utc)
+    session.add(trip_req)
+
+    # 6. Commit & notify
+    session.commit()
+    session.refresh(booking)
+
+    if local.user_id:
+        add_notification(
+            session,
+            local.user_id,
+            "offer_accepted",
+            f"Quote accepted! New Booking #{booking.id}",
+            f"{user.full_name} accepted your quote for {booking.booking_date} (${subtotal:.2f}).",
+            "/local-dashboard/bookings",
+            email=True,
+        )
+
+    audit_event(
+        session,
+        user.id,
+        "request.converted",
+        "trip_request",
+        trip_req.id,
+        f"Accepted offer #{offer.id} -> created Booking #{booking.id}",
+        request,
+    )
+
+    return {
+        "ok": True,
+        "booking_id": booking.id,
+        "request_id": trip_req.id,
+        "redirect_url": f"/dashboard/bookings/{booking.id}",
+    }
+
+
+@app.get("/api/admin/requests")
+def admin_list_requests(
+    user: Annotated[User, Depends(admin_user)],
+    session: Annotated[Session, Depends(get_session)],
+    status: Optional[str] = None,
+    city: Optional[str] = None,
+    page: int = 1,
+    limit: int = 50,
+):
+    query = select(TripRequest)
+    if status and status != "all":
+        query = query.where(TripRequest.status == status)
+    if city and city != "all":
+        query = query.where(TripRequest.city_slug == slugify(city))
+
+    total = len(session.exec(query).all())
+    reqs = session.exec(
+        query.order_by(TripRequest.created_at.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+    ).all()
+
+    return {
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "items": [_hal_request_dict(session, r, include_offers=True) for r in reqs],
+    }
+
+
+@app.post("/api/admin/requests/{request_id}/notify-locals")
+def admin_notify_candidate_locals(
+    request_id: int,
+    request: Request,
+    user: Annotated[User, Depends(admin_user)],
+    session: Annotated[Session, Depends(get_session)],
+):
+    trip_req = session.get(TripRequest, request_id)
+    if not trip_req:
+        raise HTTPException(404, "Trip request not found")
+
+    candidate_locals = session.exec(
+        select(LocalProfile).where(
+            or_(
+                LocalProfile.city_slug == trip_req.city_slug,
+                LocalProfile.country_code == trip_req.country_code,
+            )
+        )
+    ).all()
+
+    dispatched = 0
+    for cand in candidate_locals:
+        if _hal_is_local_eligible(session, cand) and cand.user_id and cand.user_id != trip_req.tourist_user_id:
+            add_notification(
+                session,
+                cand.user_id,
+                "opportunity_new",
+                f"[Priority] New opportunity in {trip_req.city_name}",
+                f"A traveler is requesting a local in {trip_req.city_name} for {trip_req.booking_date} ({trip_req.category}). Submit your proposal now.",
+                "/local-dashboard/opportunities",
+                email=True,
+            )
+            dispatched += 1
+
+    if trip_req.status == "submitted":
+        trip_req.status = "matching"
+        trip_req.updated_at = datetime.now(timezone.utc)
+        session.add(trip_req)
+        session.commit()
+
+    audit_event(session, user.id, "admin.request_dispatched", "trip_request", trip_req.id, f"Dispatched alerts to {dispatched} locals for request #{trip_req.id}", request)
+    return {"ok": True, "dispatched_count": dispatched, "status": trip_req.status}
+

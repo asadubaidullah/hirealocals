@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -20,6 +20,7 @@ import {
   MapPinned,
   Rocket,
   Settings,
+  Sparkles,
   Star,
   Tags,
   UserRoundCheck,
@@ -78,6 +79,11 @@ const groups: NavGroup[] = [
         href: "/admin/bookings",
         label: "Bookings",
         icon: CalendarDays,
+      },
+      {
+        href: "/admin/requests",
+        label: "Custom Requests",
+        icon: Sparkles,
       },
       {
         href: "/admin/payments",
