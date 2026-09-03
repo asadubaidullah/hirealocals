@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { ArrowRight, MapPin } from "lucide-react";
 import { getBlogPost, getCities } from "@/lib/content";
+import { isThingsToDoEligible } from "@/lib/things-to-do";
 import { shareImageUrl, siteUrl } from "@/lib/site";
 
 export const dynamic="force-dynamic";
@@ -102,6 +103,23 @@ export default async function Page({params}:{params:Promise<{slug:string}>}){
       {relatedCities.length?<aside className="seo-related-cities" aria-label="Related destinations">
         <div><span className="eyebrow">Continue planning</span><h2>Explore the city behind this guide.</h2><p>See the local profiles, services and practical destination information available on HireALocals.</p></div>
         <div className="seo-related-city-links">{relatedCities.map(city=><Link href={`/${city.country_slug}/${city.slug}`} key={city.id}><MapPin size={15}/><span>{city.name}</span><ArrowRight size={15}/></Link>)}</div>
+        {relatedCities.find(c=>isThingsToDoEligible(c.slug)) ? (
+          (() => {
+            const ttdCity = relatedCities.find(c=>isThingsToDoEligible(c.slug))!;
+            return (
+              <div className="seo-related-ttd-card">
+                <div>
+                  <span className="badge">Curated Itinerary</span>
+                  <h3>Top Things to Do in {ttdCity.name}</h3>
+                  <p>Explore our resident-curated guide to secret spots, food walks, and scenic trails in {ttdCity.name}.</p>
+                </div>
+                <Link className="btn secondary" href={`/${ttdCity.country_slug}/${ttdCity.slug}/things-to-do`}>
+                  View Guide <ArrowRight size={15}/>
+                </Link>
+              </div>
+            );
+          })()
+        ) : null}
       </aside>:null}
 
       <div className="seo-article-footer-cta"><div><h2>Prefer help from someone who lives there?</h2><p>Compare local profiles, services, languages and reviews before you send a request.</p></div><Link className="btn" href="/explore">Find a Local <ArrowRight size={16}/></Link></div>
