@@ -23,6 +23,7 @@ import {
 import LocalCard from "@/components/LocalCard";
 import { getBlogPosts, getCity } from "@/lib/content";
 import { getDestinationContent } from "@/lib/destinationContent";
+import { isThingsToDoEligible } from "@/lib/things-to-do";
 import { serverApiUrl, shareImageUrl, siteUrl } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
@@ -253,6 +254,15 @@ export default async function CityPage({
                 <Link className="btn secondary" href="/request-a-local">
                   Request a custom trip
                 </Link>
+
+                {isThingsToDoEligible(c.slug) ? (
+                  <Link
+                    className="btn secondary"
+                    href={`/${c.country_slug}/${c.slug}/things-to-do`}
+                  >
+                    Things to Do in {c.name} <ArrowRight size={16} />
+                  </Link>
+                ) : null}
               </div>
 
               <div className="dest-trust-pills">
@@ -462,6 +472,24 @@ export default async function CityPage({
               </article>
             ))}
           </div>
+
+          {isThingsToDoEligible(c.slug) ? (
+            <div className="dest-ttd-banner">
+              <div className="dest-ttd-copy">
+                <span className="badge">Curated Activity Guide</span>
+                <h3>Planning what to see and do in {c.name}?</h3>
+                <p>
+                  Explore our resident-curated guide covering secret mews, local food trails, street art, and scenic walks.
+                </p>
+              </div>
+              <Link
+                className="btn secondary"
+                href={`/${c.country_slug}/${c.slug}/things-to-do`}
+              >
+                Things to Do in {c.name} <ArrowRight size={16} />
+              </Link>
+            </div>
+          ) : null}
         </div>
       </section>
 

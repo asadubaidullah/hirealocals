@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { serverApiUrl, siteUrl } from "@/lib/site";
 import { getCities, getBlogPosts, getServiceCategories } from "@/lib/content";
+import { isThingsToDoEligible } from "@/lib/things-to-do";
 
 export const dynamic="force-dynamic";
 
@@ -35,10 +36,12 @@ export default async function sitemap():Promise<MetadataRoute.Sitemap>{
   ]);
 
   const activeCategories=categories.filter(c=>c.active!==false);
+  const eligibleThingsToDoCities=cities.filter(c=>c.published!==false && isThingsToDoEligible(c.slug));
 
   const entries:MetadataRoute.Sitemap=[
     ...staticPaths.map(path=>({url:`${siteUrl}${path}`})),
     ...cities.map(city=>({url:`${siteUrl}/${city.country_slug}/${city.slug}`,lastModified:dateOrUndefined(city.updated_at)})),
+    ...eligibleThingsToDoCities.map(city=>({url:`${siteUrl}/${city.country_slug}/${city.slug}/things-to-do`,lastModified:dateOrUndefined(city.updated_at)})),
     ...activeCategories.map(cat=>({url:`${siteUrl}/experiences/${cat.slug}`})),
     ...localRows.filter((row:any)=>row?.profile?.slug).map((row:any)=>({url:`${siteUrl}/locals/${row.profile.slug}`,lastModified:dateOrUndefined(row.profile.updated_at)})),
     ...posts.map(post=>({url:`${siteUrl}/blog/${post.slug}`,lastModified:dateOrUndefined(post.updated_at||post.published_at)}))
