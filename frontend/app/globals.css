@@ -1702,9 +1702,9 @@ html[data-theme="dark"] .btn.secondary{
     margin:0;
   }
 
-  .hal-footer-grid{
-    grid-template-columns:1.5fr repeat(2,1fr);
-  }
+  /* legacy footer rule 1 removed */
+
+
 }
 
 @media(max-width:900px){
@@ -1738,14 +1738,14 @@ html[data-theme="dark"] .btn.secondary{
     grid-template-columns:1fr;
   }
 
-  .hal-footer-grid{
-    grid-template-columns:1fr 1fr;
-    gap:28px 20px;
-  }
+  /* legacy footer rule 2 removed */
 
-  .hal-footer-brand,
-  .hal-footer-support{
-    grid-column:1/-1;
+
+
+
+
+
+
   }
 
   .hal-footer-bottom{
@@ -36351,6 +36351,7 @@ html[data-theme="dark"] .admin-kyc-preview-frame{
    ========================================================= */
 .hal-footer {
   padding: 56px 0 28px;
+  overflow-x: hidden;
   background: #0d291f;
   color: #d2e4dc;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
@@ -36434,7 +36435,7 @@ html[data-theme="dark"] .admin-kyc-preview-frame{
 .hal-support-phone-text {
   display: flex;
   align-items: center;
-  gap: 8px;
+  word-break: break-word;
   font-size: 13px;
   color: #cde0d7;
 }
@@ -36618,46 +36619,174 @@ html[data-theme="dark"] .admin-kyc-preview-frame{
   border: 2px solid var(--admin-surface, #14201a);
 }
 
-/* Responsive queries */
-@media (max-width: 1024px) {
+/* Responsive Queries for Footer */
+/* 1. Large Laptop / Desktop: 1025px - 1200px */
+@media (max-width: 1200px) and (min-width: 1025px) {
   .hal-footer-grid {
-    grid-template-columns: 1.5fr 1fr 1fr 1.3fr;
-    gap: 32px;
+    grid-template-columns: 1.6fr 1fr 1fr 1fr;
+    gap: 28px;
   }
   .hal-footer-support {
     grid-column: 1 / -1;
-    max-width: 480px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: center;
+    padding: 20px 24px;
+  }
+  .hal-support-info {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: 0;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    padding-right: 20px;
+  }
+  .hal-support-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
   }
 }
 
-@media (max-width: 640px) {
+/* 2. Tablet: 769px - 1024px */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .hal-footer-grid {
+    grid-template-columns: 1.5fr repeat(3, 1fr);
+    gap: 28px 20px;
+  }
+  .hal-footer-support {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1.2fr 1.8fr;
+    gap: 24px;
+    align-items: center;
+    padding: 22px 24px;
+  }
+  .hal-support-info {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: 0;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    padding-right: 20px;
+  }
+  .hal-support-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+}
+
+/* 3. Phablet & Large Mobile: 481px - 768px */
+@media (max-width: 768px) and (min-width: 481px) {
   .hal-footer {
-    padding: 40px 0 24px;
+    padding: 44px 0 24px;
   }
   .hal-footer-grid {
-    grid-template-columns: 1fr;
-    gap: 28px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 28px 18px;
+  }
+  .hal-footer-brand {
+    grid-column: 1 / -1;
   }
   .hal-footer-brand p {
     max-width: 100%;
   }
   .hal-footer-support {
-    max-width: 100%;
-    padding: 18px 16px;
+    grid-column: 1 / -1;
+    padding: 20px 18px;
   }
   .hal-support-actions-grid {
-    flex-direction: column;
-  }
-  .hal-support-btn {
-    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
   }
   .hal-footer-bottom {
+    margin-top: 32px;
+    padding-top: 20px;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
+    align-items: center;
+    text-align: center;
+    gap: 14px;
+  }
+  .hal-footer-socials {
+    justify-content: center;
   }
 }
 
+/* 4. Compact Mobile: 320px - 480px */
+@media (max-width: 480px) {
+  .hal-footer {
+    padding: 36px 0 20px;
+    overflow-x: hidden;
+  }
+  .hal-footer-grid {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .hal-footer-brand p {
+    max-width: 100%;
+    font-size: 12px;
+    line-height: 1.55;
+    margin: 10px 0 12px;
+  }
+  .hal-footer-col strong,
+  .hal-footer-support > strong {
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+  .hal-footer-nav {
+    gap: 8px;
+  }
+  .hal-footer-nav a {
+    font-size: 13px;
+    padding: 2px 0;
+  }
+  .hal-footer-support {
+    padding: 16px 14px;
+    border-radius: 16px;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .hal-support-email-link,
+  .hal-support-phone-text {
+    font-size: 12px;
+    word-break: break-all;
+  }
+  .hal-support-actions-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .hal-support-btn {
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 12px;
+    font-size: 13px;
+    box-sizing: border-box;
+  }
+  .hal-footer-bottom {
+    margin-top: 28px;
+    padding-top: 18px;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 14px;
+  }
+  .hal-footer-copy {
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+    text-align: center;
+    font-size: 11px;
+  }
+  .hal-footer-bullet {
+    display: none;
+  }
+  .hal-footer-socials {
+    justify-content: center;
+    gap: 10px;
+  }
+}
 /* =========================================================
    REVENUE COMMAND CENTER (SAAS EXECUTIVE SUITE)
    ========================================================= */
