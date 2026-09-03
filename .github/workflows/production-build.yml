@@ -60,5 +60,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: hirealocals-production
-          path: frontend/hirealocals-production.tar.gz
+          path: hirealocals-production.tar.gz
           if-no-files-found: error
