@@ -1738,20 +1738,6 @@ html[data-theme="dark"] .btn.secondary{
     grid-template-columns:1fr;
   }
 
-  /* legacy footer rule 2 removed */
-
-
-
-
-
-
-
-  }
-
-  .hal-footer-bottom{
-    align-items:flex-start;
-    flex-direction:column;
-  }
 }
 
 /* HOMEPAGE CORE REPAIR */
