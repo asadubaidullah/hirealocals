@@ -21,8 +21,8 @@ export default function RefundPage() {
 
         <div className="notice" style={{ marginBottom: 28 }}>
           HireALocals operates a verified host marketplace. Online booking payments
-          are processed securely through Safepay and local host payouts are scheduled
-          upon delivery of the booked experience.
+          are processed securely through Safepay, and local host payouts are eligible
+          only after the booked experience has been completed.
         </div>
 
         <h2>1. Overview &amp; Payment Protection</h2>
@@ -30,8 +30,9 @@ export default function RefundPage() {
           HireALocals connects travelers with independent local hosts for private
           guided experiences. To protect both travelers and local hosts, when online
           payment is completed through our authorized payment processor (Safepay),
-          payments are processed securely. Local host payouts are disbursed only after
-          the scheduled booking has concluded and service delivery is confirmed.
+          payments are processed securely. Local host payout occurs only after the
+          booked experience has been completed and the booking and settlement are eligible
+          for payout under HireALocals operations.
         </p>
 
         <h2>2. Refund Eligibility</h2>
@@ -41,9 +42,9 @@ export default function RefundPage() {
             <strong>Host Cancellation or Non-Attendance:</strong> If a confirmed Local host cancels
             the booking prior to the scheduled start time or fails to provide the booked experience
             at the designated meeting point without prior mutual agreement, the traveler is entitled
-            to a 100% refund of all amounts paid (including service price and platform fee). Where
-            practical and mutually agreed, a free reschedule option may also be coordinated instead
-            of a refund.
+            to a 100% refund of all amounts paid (including service price and HireALocals 12% platform fee).
+            Where practical and mutually agreed between traveler and host, a free reschedule option
+            may also be coordinated instead of a refund.
           </li>
           <li>
             <strong>Pending or Declined Booking Requests:</strong> When a traveler sends a booking
@@ -57,10 +58,11 @@ export default function RefundPage() {
             any cancellation charge or refund required.
           </li>
           <li>
-            <strong>Mutual Cancellation Agreement:</strong> If the traveler and host mutually agree
+            <strong>Mutual Cancellation Coordination:</strong> If the traveler and host mutually agree
             in writing (via in-app messages) to cancel a paid booking before the experience commences,
-            a refund will be processed in accordance with the terms mutually agreed upon and confirmed
-            with platform support.
+            the cancellation must be submitted to HireALocals Support for coordination. The refundable
+            amount is reviewed and determined for that specific case, and any approved refund is then
+            processed through the approved Safepay refund workflow.
           </li>
         </ul>
 
@@ -90,14 +92,12 @@ export default function RefundPage() {
           not issue cash refunds or redirect refunds to alternative third-party cards or accounts.
         </p>
 
-        <h2>5. Refund Timeline</h2>
+        <h2>5. Refund Posting Time</h2>
         <p>
-          Once a refund request is approved by HireALocals Support, the refund instruction is
-          promptly submitted to our payment processor (Safepay). While refunds are typically
-          estimated to appear on your payment statement within 5 to 10 business days, this timeframe
-          is an estimate and not a guaranteed service level agreement. The exact timing for funds
-          to reflect on your account depends on your payment provider, card issuer, and financial
-          institution&apos;s processing cycles.
+          Once an approved refund is submitted through Safepay, the time for the funds to
+          appear in the traveler&apos;s account depends on the payment method, card issuer,
+          bank, and applicable payment-network processing times. HireALocals does not promise
+          a fixed number of days or guaranteed posting schedule.
         </p>
 
         <h2>6. Service Issues &amp; Dispute Resolution</h2>
@@ -107,8 +107,9 @@ export default function RefundPage() {
           travelers are encouraged to notify HireALocals Support within 48 hours of the scheduled
           completion time. Reporting an issue within 48 hours helps HireALocals investigate and
           resolve the matter promptly while communication records and availability details are fresh.
-          Our support team will review the timeline, messaging history, and host feedback to reach
-          a fair and objective resolution.
+          This 48-hour window serves as recommended guidance to enable timely investigation, rather
+          than an automatic forfeiture of customer rights. Our support team will review the timeline,
+          messaging history, and host feedback to reach a fair and objective resolution.
         </p>
 
         <h2>7. Exclusions</h2>
@@ -138,3 +139,4 @@ export default function RefundPage() {
     </section>
   );
 }
+

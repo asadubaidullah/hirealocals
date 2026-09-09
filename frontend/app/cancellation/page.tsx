@@ -63,8 +63,9 @@ export default function CancellationPage() {
           <li>
             <strong>Advance Notice Guidance:</strong> As an operational courtesy, travelers are
             encouraged to provide as much advance notice as possible (ideally 24 to 48 hours prior
-            to the scheduled start time where practical) if their itinerary changes. This allows the
-            host an opportunity to adjust their calendar or accept other traveler inquiries.
+            to the scheduled start time where practical) if their itinerary changes. This is an
+            operational recommendation to allow the host an opportunity to adjust their calendar,
+            not a mandatory cancellation condition or automatic refund eligibility rule.
           </li>
           <li>
             <strong>Refund Evaluation:</strong> When a paid cancellation is requested, our support
@@ -88,13 +89,15 @@ export default function CancellationPage() {
           <li>
             <strong>Full 100% Refund:</strong> If a host cancels a confirmed, paid booking or fails to
             provide the booked experience, the traveler is entitled to a 100% refund of all amounts paid
-            (including service price and platform fee). Refunds are submitted promptly to the payment
-            processor; posting times to your account depend on banking processing cycles (see our{" "}
-            <Link href="/refund">Refund Policy</Link>).
+            (including service price and HireALocals 12% platform fee). Refunds are submitted promptly
+            to the payment processor; posting times to your account depend on payment provider and banking
+            processing cycles (see our <Link href="/refund">Refund Policy</Link>).
           </li>
           <li>
             <strong>Free Reschedule Option:</strong> Where practical and mutually agreed between traveler
             and host, a free reschedule to an alternative date or time may be offered instead of a cancellation.
+            A reschedule is an optional coordination arrangement and not an automatic entitlement, guaranteed
+            software feature, or host availability guarantee.
           </li>
         </ul>
 
