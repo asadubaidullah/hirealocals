@@ -112,22 +112,31 @@ export default async function Footer() {
             </div>
 
             <div className="hal-support-actions-grid">
+              <Link
+                href="/contact"
+                className="hal-support-btn hal-support-btn-primary"
+                aria-label="Send a message to HireALocals support"
+              >
+                <Send size={15} />
+                <span>Message us</span>
+              </Link>
+
               {phone ? (
                 <a
                   href={phoneHref(phone)}
-                  className="hal-support-btn hal-support-btn-call"
+                  className="hal-support-btn hal-support-btn-secondary"
                   aria-label={`Call HireALocals at ${phone}`}
                 >
-                  <Phone size={16} />
+                  <Phone size={15} />
                   <span>Call us</span>
                 </a>
               ) : (
                 <a
                   href={`mailto:${email}`}
-                  className="hal-support-btn hal-support-btn-call"
+                  className="hal-support-btn hal-support-btn-secondary"
                   aria-label={`Email support at ${email}`}
                 >
-                  <Mail size={16} />
+                  <Mail size={15} />
                   <span>Email us</span>
                 </a>
               )}
@@ -140,19 +149,10 @@ export default async function Footer() {
                   className="hal-support-btn hal-support-btn-wa"
                   aria-label="Chat with HireALocals on WhatsApp"
                 >
-                  <MessageCircle size={16} />
+                  <MessageCircle size={15} />
                   <span>WhatsApp</span>
                 </a>
               ) : null}
-
-              <Link
-                href="/contact"
-                className="hal-support-btn hal-support-btn-msg"
-                aria-label="Send a message to HireALocals support"
-              >
-                <Send size={15} />
-                <span>Message us</span>
-              </Link>
             </div>
           </div>
         </div>

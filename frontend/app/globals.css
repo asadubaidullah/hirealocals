@@ -36473,13 +36473,19 @@ html[data-theme="dark"] .admin-kyc-preview-frame{
   color: #ffffff;
 }
 
+.hal-support-btn-primary,
 .hal-support-btn-call {
   background: rgba(19, 121, 91, 0.35);
-  border-color: rgba(85, 230, 181, 0.3);
+  border-color: rgba(85, 230, 181, 0.35);
+  color: #ffffff;
 }
 
+.hal-support-btn-primary:hover,
+.hal-support-btn-primary:focus-visible,
 .hal-support-btn-call:hover {
   background: rgba(19, 121, 91, 0.55);
+  border-color: rgba(85, 230, 181, 0.6);
+  color: #ffffff;
 }
 
 .hal-support-btn-wa {
@@ -36488,12 +36494,26 @@ html[data-theme="dark"] .admin-kyc-preview-frame{
   color: #ffffff;
 }
 
-.hal-support-btn-wa:hover {
+.hal-support-btn-wa:hover,
+.hal-support-btn-wa:focus-visible {
   background: #138760;
+  border-color: #1fb986;
+  color: #ffffff;
 }
 
+.hal-support-btn-secondary,
 .hal-support-btn-msg {
   background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #c7dbd3;
+}
+
+.hal-support-btn-secondary:hover,
+.hal-support-btn-secondary:focus-visible,
+.hal-support-btn-msg:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
 }
 
 /* Footer Bottom Bar */
@@ -36629,7 +36649,7 @@ html[data-theme="dark"] .admin-kyc-preview-frame{
   }
   .hal-support-actions-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
     gap: 8px;
   }
 }
@@ -36657,7 +36677,7 @@ html[data-theme="dark"] .admin-kyc-preview-frame{
   }
   .hal-support-actions-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
     gap: 10px;
   }
 }
@@ -36683,7 +36703,7 @@ html[data-theme="dark"] .admin-kyc-preview-frame{
   }
   .hal-support-actions-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
     gap: 10px;
   }
   .hal-footer-bottom {
@@ -36745,8 +36765,8 @@ html[data-theme="dark"] .admin-kyc-preview-frame{
   }
   .hal-support-btn {
     width: 100%;
-    min-height: 40px;
-    padding: 8px 12px;
+    min-height: 44px;
+    padding: 10px 14px;
     font-size: 13px;
     box-sizing: border-box;
   }
