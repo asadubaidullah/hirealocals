@@ -75,14 +75,14 @@ export default function PrivacyPage() {
           Requests are subject to legitimate operational and legal retention requirements.
         </p>
 
-        <h2>6. Data Controller &amp; Regulatory Jurisdiction</h2>
+        <h2>6. Data Responsibility &amp; Inquiries</h2>
         <p>
-          <em>
-            [Pending Business/Legal Completion: Designated legal data controller identity,
-            registered company address, and regulatory jurisdiction / supervisory authority
-            disclosures (such as UK/EU GDPR representatives) are to be inserted upon final legal
-            confirmation.]
-          </em>
+          HireALocals is responsible for handling personal information collected through
+          the platform (hirealocals.com). For any privacy-related questions, data access
+          or deletion requests, or inquiries regarding how your information is handled,
+          please contact our support team at{" "}
+          <a href="mailto:support@hirealocals.com">support@hirealocals.com</a> or via our{" "}
+          <Link href="/contact">contact page</Link>.
         </p>
       </div>
     </section>

@@ -51,13 +51,12 @@ export default function TermsPage() {
           these Terms.
         </p>
 
-        <h2>5. Legal Entity &amp; Governing Law</h2>
+        <h2>5. Platform Agreement</h2>
         <p>
-          <em>
-            [Pending Business/Legal Completion: Official registered entity name, company
-            registration number, registered office address, and governing law / dispute
-            resolution jurisdiction are to be finalized prior to public launch.]
-          </em>
+          These Terms govern your access to and use of the HireALocals platform
+          (hirealocals.com). HireALocals provides an online marketplace connecting travelers
+          with independent local hosts. All platform features, bookings, and user interactions
+          are subject to these Terms and our published platform policies.
         </p>
 
         <h2>6. Contact &amp; Inquiries</h2>
