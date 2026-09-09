@@ -556,8 +556,8 @@ export default async function CityPage({
               <div className="dest-trust-item">
                 <CheckCircle2 size={18} />
                 <div>
-                  <strong>Secure escrow checkout</strong>
-                  <span>Funds held safely until completion</span>
+                  <strong>Secure payment checkout</strong>
+                  <span>Protected transactions via Safepay</span>
                 </div>
               </div>
 

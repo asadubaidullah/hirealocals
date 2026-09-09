@@ -51,7 +51,7 @@ export default async function Footer() {
             </p>
             <div className="hal-footer-trust-micro">
               <ShieldCheck size={16} />
-              <span>Verified Hosts & Secure Escrow</span>
+              <span>Verified Hosts &amp; Secure Payments</span>
             </div>
           </div>
 

@@ -59,8 +59,8 @@ const benefits = [
   },
   {
     icon: Wallet,
-    title: "Guaranteed payment protection",
-    text: "Traveler payments are pre-funded and held securely in platform escrow before you meet. Payouts are tracked transparently in your workspace.",
+    title: "Protected booking payments",
+    text: "Traveler payments are pre-funded and processed securely through Safepay before you meet. Payouts are tracked transparently in your workspace.",
   },
   {
     icon: Star,
@@ -107,7 +107,7 @@ const hostFaqs = [
   },
   {
     q: "How do payouts work?",
-    a: "When a traveler books with you, their payment is pre-authorized and held safely in platform escrow. After your booking is completed, your earnings are credited directly to your Local account balance with transparent ledger tracking.",
+    a: "When a traveler books with you, their payment is processed securely through Safepay. After your booking is completed, your earnings are credited directly to your Local account balance with transparent ledger tracking.",
   },
   {
     q: "What languages and services are most in demand?",
@@ -156,7 +156,7 @@ export default function BecomeALocalPage() {
                 </div>
                 <div className="bal-proof-pill">
                   <CheckCircle2 size={16} />
-                  <span>Secure escrow payouts</span>
+                  <span>Secure host payouts</span>
                 </div>
               </div>
             </div>

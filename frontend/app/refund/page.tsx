@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Refund Policy | HireALocals",
   description:
-    "Learn about HireALocals refund eligibility, cancellation coordination, escrow payment protection, and resolution procedures.",
+    "Learn about HireALocals refund eligibility, cancellation coordination, secure payment protection, and resolution procedures.",
   alternates: {
     canonical: "/refund",
   },
@@ -21,16 +21,17 @@ export default function RefundPage() {
 
         <div className="notice" style={{ marginBottom: 28 }}>
           HireALocals operates a verified host marketplace. Online booking payments
-          are held securely in escrow until the scheduled experience is delivered.
+          are processed securely through Safepay and local host payouts are scheduled
+          upon delivery of the booked experience.
         </div>
 
-        <h2>1. Overview & Escrow Protection</h2>
+        <h2>1. Overview &amp; Payment Protection</h2>
         <p>
           HireALocals connects travelers with independent local hosts for private
           guided experiences. To protect both travelers and local hosts, when online
           payment is completed through our authorized payment processor (Safepay),
-          funds are held securely in platform escrow. Local host payouts remain
-          held until the booking has concluded and service delivery is confirmed.
+          payments are processed securely. Local host payouts are disbursed only after
+          the scheduled booking has concluded and service delivery is confirmed.
         </p>
 
         <h2>2. Refund Eligibility</h2>
@@ -38,9 +39,11 @@ export default function RefundPage() {
         <ul style={{ paddingLeft: 24, lineHeight: 1.8, marginBottom: 16 }}>
           <li>
             <strong>Host Cancellation or Non-Attendance:</strong> If a confirmed Local host cancels
-            the booking prior to the scheduled start time or fails to appear at the designated
-            meeting point without prior mutual agreement, the traveler is entitled to a full (100%)
-            refund of all amounts paid.
+            the booking prior to the scheduled start time or fails to provide the booked experience
+            at the designated meeting point without prior mutual agreement, the traveler is entitled
+            to a 100% refund of all amounts paid (including service price and platform fee). Where
+            practical and mutually agreed, a free reschedule option may also be coordinated instead
+            of a refund.
           </li>
           <li>
             <strong>Pending or Declined Booking Requests:</strong> When a traveler sends a booking
@@ -66,13 +69,13 @@ export default function RefundPage() {
           Because local hosts allocate their personal time and decline other traveler inquiries
           once a booking is confirmed and paid, paid bookings cannot be cancelled via silent
           one-click self-service. All cancellations of paid bookings must be submitted through
-          HireALocals Support (<Link href="/contact">Contact & Support</Link> or email{" "}
+          HireALocals Support (<Link href="/contact">Contact &amp; Support</Link> or email{" "}
           <a href="mailto:support@hirealocals.com">support@hirealocals.com</a>) with the booking
           reference number. This ensures that:
         </p>
         <ul style={{ paddingLeft: 24, lineHeight: 1.8, marginBottom: 16 }}>
           <li>The local host is promptly notified so they can unblock their schedule.</li>
-          <li>Platform escrow ledgers and payment records remain strictly synchronized.</li>
+          <li>Platform booking ledgers and payment records remain strictly synchronized.</li>
           <li>Refunds are initiated through the official payment processor merchant channel.</li>
         </ul>
         <p>
@@ -80,7 +83,7 @@ export default function RefundPage() {
           additional details on notice periods and host communications.
         </p>
 
-        <h2>4. Payment Processing & Refund Method</h2>
+        <h2>4. Payment Processing &amp; Refund Method</h2>
         <p>
           All approved refunds are credited back directly to the original payment method utilized
           during checkout (via Safepay). For security and anti-fraud compliance, HireALocals does
@@ -89,19 +92,23 @@ export default function RefundPage() {
 
         <h2>5. Refund Timeline</h2>
         <p>
-          Once a refund request is authorized by HireALocals Support, the refund is submitted
-          immediately to our payment gateway. The actual time required for funds to appear on the
-          customer&apos;s statement depends on the customer&apos;s card-issuing financial institution and
-          standard banking processing cycles (typically 5 to 10 standard business days).
+          Once a refund request is approved by HireALocals Support, the refund instruction is
+          promptly submitted to our payment processor (Safepay). While refunds are typically
+          estimated to appear on your payment statement within 5 to 10 business days, this timeframe
+          is an estimate and not a guaranteed service level agreement. The exact timing for funds
+          to reflect on your account depends on your payment provider, card issuer, and financial
+          institution&apos;s processing cycles.
         </p>
 
-        <h2>6. Service Issues & Dispute Resolution</h2>
+        <h2>6. Service Issues &amp; Dispute Resolution</h2>
         <p>
           If a traveler encounters a substantial issue during an experience (such as material
           deviation from the confirmed itinerary, safety concerns, or unprofessional conduct),
-          the traveler must notify HireALocals Support within 48 hours of the scheduled completion time.
-          Our support team will review the timeline, communication records, and host feedback
-          to reach a fair, objective resolution.
+          travelers are encouraged to notify HireALocals Support within 48 hours of the scheduled
+          completion time. Reporting an issue within 48 hours helps HireALocals investigate and
+          resolve the matter promptly while communication records and availability details are fresh.
+          Our support team will review the timeline, messaging history, and host feedback to reach
+          a fair and objective resolution.
         </p>
 
         <h2>7. Exclusions</h2>

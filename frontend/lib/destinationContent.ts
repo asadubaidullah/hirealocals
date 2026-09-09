@@ -156,7 +156,7 @@ const DEFAULT_DESTINATION_CONTENT: DestinationContent = {
     },
     {
       question: "How does payment and safety work?",
-      answer: "Profiles undergo verification review. Your payment is held securely in platform escrow and is only released after your scheduled experience takes place."
+      answer: "Profiles undergo verification review. Your payment is processed securely through Safepay and host payouts are released only after your scheduled experience takes place."
     }
   ]
 };

@@ -49,8 +49,8 @@ export default function CancellationPage() {
           specific date and time window exclusively for the traveler.
         </p>
         <p>
-          To ensure platform escrows, host compensation, and payment gateway records remain
-          accurately synchronized:
+          To ensure platform booking records, host compensation, and payment gateway transactions
+          remain accurately synchronized:
         </p>
         <ul style={{ paddingLeft: 24, lineHeight: 1.8, marginBottom: 16 }}>
           <li>
@@ -61,9 +61,10 @@ export default function CancellationPage() {
             reference number.
           </li>
           <li>
-            <strong>Advance Notice:</strong> Travelers are strongly encouraged to provide as much
-            advance notice as possible (ideally 24 to 48 hours before the scheduled start time)
-            if plans change, giving the host an opportunity to accept other travelers.
+            <strong>Advance Notice Guidance:</strong> As an operational courtesy, travelers are
+            encouraged to provide as much advance notice as possible (ideally 24 to 48 hours prior
+            to the scheduled start time where practical) if their itinerary changes. This allows the
+            host an opportunity to adjust their calendar or accept other traveler inquiries.
           </li>
           <li>
             <strong>Refund Evaluation:</strong> When a paid cancellation is requested, our support
@@ -81,33 +82,37 @@ export default function CancellationPage() {
         </p>
         <ul style={{ paddingLeft: 24, lineHeight: 1.8, marginBottom: 16 }}>
           <li>
-            <strong>Immediate Traveler Notification:</strong> If a host must cancel, they are
-            required to notify the traveler and platform support immediately.
+            <strong>Prompt Traveler Notification:</strong> If a host must cancel, they are
+            expected to notify the traveler and platform support promptly.
           </li>
           <li>
-            <strong>Full 100% Refund:</strong> If a host cancels a confirmed, paid booking, the
-            traveler receives an automatic, full 100% refund of all amounts paid, including service
-            price and platform fee.
+            <strong>Full 100% Refund:</strong> If a host cancels a confirmed, paid booking or fails to
+            provide the booked experience, the traveler is entitled to a 100% refund of all amounts paid
+            (including service price and platform fee). Refunds are submitted promptly to the payment
+            processor; posting times to your account depend on banking processing cycles (see our{" "}
+            <Link href="/refund">Refund Policy</Link>).
           </li>
           <li>
-            <strong>Alternative Scheduling:</strong> If mutually agreeable, the traveler and host
-            may choose to reschedule the experience for a different date or time instead of cancelling.
+            <strong>Free Reschedule Option:</strong> Where practical and mutually agreed between traveler
+            and host, a free reschedule to an alternative date or time may be offered instead of a cancellation.
           </li>
         </ul>
 
         <h2>4. Schedule Modifications &amp; Meeting Adjustments</h2>
         <p>
-          Not every change requires a full cancellation:
+          When plans shift slightly, full cancellation may not be necessary:
         </p>
         <ul style={{ paddingLeft: 24, lineHeight: 1.8, marginBottom: 16 }}>
           <li>
-            <strong>Meeting Details:</strong> Travelers can update their meeting point, address,
-            or special instructions directly on the booking details page at any time prior to the trip.
+            <strong>Meeting Point Coordination:</strong> Travelers can update their meeting point,
+            pickup address, or special instructions on the booking details page or via messaging prior to the trip.
           </li>
           <li>
-            <strong>Time / Date Changes:</strong> Minor time adjustments on the same day can be
-            coordinated directly between traveler and host via our secure in-app messaging system
-            (<Link href="/dashboard/messages">Messages</Link>).
+            <strong>Same-Day Timing Adjustments:</strong> Adjustments to meeting times or locations
+            on the day of the trip can be coordinated directly between traveler and host via our secure in-app
+            messaging system (<Link href="/dashboard/messages">Messages</Link>) where both parties mutually
+            agree. Same-day coordination is an available option subject to host availability and does
+            not constitute an unconditional refund or cancellation guarantee.
           </li>
         </ul>
 
