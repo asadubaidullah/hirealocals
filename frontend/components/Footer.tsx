@@ -86,6 +86,8 @@ export default async function Footer() {
               <Link href="/local-dashboard">Local Dashboard</Link>
               <Link href="/terms">Terms of Service</Link>
               <Link href="/privacy">Privacy Policy</Link>
+              <Link href="/cancellation">Cancellation Policy</Link>
+              <Link href="/refund">Refund Policy</Link>
             </nav>
           </div>
 

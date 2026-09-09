@@ -291,7 +291,7 @@ export default function BookingBox({local}:{local:any}){
       <span>Estimated total</span>
       <span>${estimatedTotal.toFixed(2)}</span>
     </div>
-    <label className="policy-check compact-policy"><input type="checkbox" checked={acceptPolicy} onChange={e=>setAcceptPolicy(e.target.checked)}/><span>I accept the <Link href="/terms" target="_blank">booking terms</Link>, including the published cancellation/refund rules.</span></label>
+    <label className="policy-check compact-policy"><input type="checkbox" checked={acceptPolicy} onChange={e=>setAcceptPolicy(e.target.checked)}/><span>I accept the <Link href="/terms" target="_blank">booking terms</Link>, including the published <Link href="/cancellation" target="_blank">cancellation</Link> and <Link href="/refund" target="_blank">refund</Link> rules.</span></label>
     <button type="button" className="btn" disabled={busy||!time||!acceptPolicy} onClick={requestBooking} style={{width:'100%',marginTop:16,opacity:(busy||!time||!acceptPolicy)?.65:1}}>{busy?'Sending...':'Request booking'}</button>
     {status&&<div className="notice" style={{marginTop:12}}>{status}</div>}
     <p className="muted" style={{fontSize:12,textAlign:'center'}}>Availability is checked live and overlapping pending/confirmed bookings are blocked. No payment is taken when you send this request. If online payments are enabled, checkout is offered after the Local confirms.</p>
