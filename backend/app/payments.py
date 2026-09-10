@@ -317,9 +317,13 @@ def booking_payment_status(
             )
 
             if verified:
+                charge_id = str(_remote.get("charge_id") or "")
+                ref = str(_remote.get("reference") or "")
                 mark_payment_paid(
                     session,
                     row,
+                    payment_intent_id=ref,
+                    charge_id=charge_id,
                 )
 
         except Exception:
@@ -633,9 +637,13 @@ async def safepay_webhook(
     if not isinstance(data, dict):
         data = payload
 
-    signature = request.headers.get("X-SFPY-SIGNATURE", "")
+    signature = (
+        request.headers.get("X-SFPY-SIGNATURE")
+        or request.headers.get("x-sfpy-signature")
+        or ""
+    )
 
-    if not safepay_verify_webhook(signature, raw):
+    if not safepay_verify_webhook(signature, raw, payload):
         raise HTTPException(400, "Invalid Safepay webhook signature")
 
     notification = data.get("notification") or {}
@@ -676,6 +684,7 @@ async def safepay_webhook(
         tracker = str(
             notification.get("tracker")
             or data.get("tracker")
+            or data.get("token")
             or ""
         )
 
@@ -752,10 +761,26 @@ async def safepay_webhook(
             or ""
         ).upper()
 
+        tx = (
+            data.get("transaction")
+            if isinstance(data.get("transaction"), dict)
+            else notification.get("transaction")
+            if isinstance(notification.get("transaction"), dict)
+            else {}
+        )
+
         reference = str(
             notification.get("reference")
             or notification.get("transaction_id")
             or data.get("reference")
+            or tx.get("reference")
+            or ""
+        )
+
+        charge_id = str(
+            notification.get("charge_id")
+            or data.get("charge_id")
+            or tx.get("token")
             or ""
         )
 
@@ -828,7 +853,8 @@ async def safepay_webhook(
                 mark_payment_paid(
                     session,
                     row,
-                    reference,
+                    payment_intent_id=reference,
+                    charge_id=charge_id,
                 )
 
             elif (

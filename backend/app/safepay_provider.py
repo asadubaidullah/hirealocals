@@ -171,43 +171,68 @@ def checkout_url(
 def verify_webhook(
     signature: str,
     raw_body: bytes | str,
+    payload: dict | None = None,
 ) -> bool:
     """
-    Verify Safepay signature against the exact raw body.
+    Verify Safepay signature against payload['data'] (Safepay standard) or raw body.
     """
 
-    if not signature or raw_body in (None, b"", ""):
+    if not signature:
         return False
 
-    try:
-        body = (
-            raw_body.encode("utf-8")
-            if isinstance(raw_body, str)
-            else bytes(raw_body)
-        )
+    secret = (settings.safepay_webhook_secret or "").strip()
+    if not secret:
+        return False
 
-        expected = hmac.new(
-            settings.safepay_webhook_secret
-            .strip()
-            .encode("utf-8"),
-            body,
-            hashlib.sha512,
-        ).hexdigest()
+    provided = signature.strip()
+    if provided.lower().startswith("sha512="):
+        provided = provided.split("=", 1)[1].strip()
 
-        provided = signature.strip()
+    # 1. Safepay standard signature: HMAC-SHA512 over json.dumps(data, separators=(',', ':'))
+    if payload and isinstance(payload, dict):
+        data = payload.get("data")
+        target_obj = data if isinstance(data, dict) else payload
+        try:
+            canonical_json = json.dumps(target_obj, separators=(",", ":"))
+            expected_sig = hmac.new(
+                secret.encode("utf-8"),
+                canonical_json.encode("utf-8"),
+                hashlib.sha512,
+            ).hexdigest()
+            if hmac.compare_digest(expected_sig.lower(), provided.lower()):
+                return True
+        except Exception:
+            pass
 
-        if provided.lower().startswith("sha512="):
-            provided = (
-                provided.split("=", 1)[1].strip()
+    # 2. Raw body fallback: HMAC-SHA512 over exact raw bytes
+    if raw_body not in (None, b"", ""):
+        try:
+            body = (
+                raw_body.encode("utf-8")
+                if isinstance(raw_body, str)
+                else bytes(raw_body)
             )
+            expected = hmac.new(
+                secret.encode("utf-8"),
+                body,
+                hashlib.sha512,
+            ).hexdigest()
+            if hmac.compare_digest(expected.lower(), provided.lower()):
+                return True
+        except Exception:
+            pass
 
-        return hmac.compare_digest(
-            expected.lower(),
-            provided.lower(),
-        )
-
+    # 3. Safepay SDK is_webhook_valid fallback
+    try:
+        client = safepay_sdk()
+        headers_dict = {"x-sfpy-signature": signature}
+        body_dict = payload if isinstance(payload, dict) else {"data": {}}
+        if client.is_webhook_valid(headers_dict, body_dict):
+            return True
     except Exception:
-        return False
+        pass
+
+    return False
 
 
 def verify_tracker_payment(
@@ -220,8 +245,7 @@ def verify_tracker_payment(
 
     Payment is accepted only when:
     exact tracker completes,
-    a charge exists,
-    CAPTURE exists,
+    a charge / transaction exists,
     amount matches,
     currency matches.
     """
@@ -241,32 +265,38 @@ def verify_tracker_payment(
         else "https://api.getsafepay.com"
     )
 
-    try:
-        response = requests.get(
-            f"{base}/reporter/api/v1/payments/{tracker}",
-            headers={
-                "X-SFPY-MERCHANT-SECRET":
-                    settings.safepay_secret_key.strip(),
-                "Accept": "application/json",
-            },
-            timeout=10,
-        )
+    response = None
+    last_error = ""
 
-    except requests.RequestException as exc:
-        return False, {
-            "reason": "remote_request_error",
-            "error": str(exc)[:200],
-        }
+    # Query canonical /order/v1/{tracker} endpoint, with fallback to /reporter/api/v1/payments/{tracker}
+    for path in (f"/order/v1/{tracker}", f"/reporter/api/v1/payments/{tracker}"):
+        try:
+            r = requests.get(
+                f"{base}{path}",
+                headers={
+                    "X-SFPY-MERCHANT-SECRET":
+                        settings.safepay_secret_key.strip(),
+                    "Accept": "application/json",
+                },
+                timeout=10,
+            )
+            if r.status_code == 200:
+                response = r
+                break
+            else:
+                last_error = f"HTTP {r.status_code}: {r.text[:200]}"
+        except requests.RequestException as exc:
+            last_error = str(exc)[:200]
+            continue
 
-    if response.status_code != 200:
+    if response is None or response.status_code != 200:
         return False, {
             "reason": "remote_http_error",
-            "status_code": response.status_code,
+            "error": last_error,
         }
 
     try:
         body = response.json()
-
     except ValueError:
         return False, {
             "reason": "invalid_remote_json"
@@ -311,6 +341,7 @@ def verify_tracker_payment(
 
     has_charge = bool(
         remote.get("charge")
+        or remote.get("transaction")
     )
 
     events = {
@@ -321,17 +352,26 @@ def verify_tracker_payment(
         if isinstance(item, dict)
     }
 
+    has_capture = (
+        "CAPTURE" in events
+        or bool(remote.get("transaction"))
+    )
+
+    tx = (
+        remote.get("transaction")
+        if isinstance(remote.get("transaction"), dict)
+        else {}
+    )
+    charge_id = str(tx.get("token") or remote.get("charge") or "")
+    reference = str(tx.get("reference") or remote.get("reference") or "")
+
     amounts: list[object] = []
     currencies: list[str] = []
 
     def walk(obj):
-
         if isinstance(obj, dict):
-
             for key, value in obj.items():
-
                 key_lower = str(key).lower()
-
                 if (
                     key_lower == "amount"
                     and not isinstance(
@@ -340,7 +380,6 @@ def verify_tracker_payment(
                     )
                 ):
                     amounts.append(value)
-
                 elif (
                     key_lower == "currency"
                     and not isinstance(
@@ -351,11 +390,8 @@ def verify_tracker_payment(
                     currencies.append(
                         str(value).upper()
                     )
-
                 walk(value)
-
         elif isinstance(obj, list):
-
             for value in obj:
                 walk(value)
 
@@ -376,10 +412,8 @@ def verify_tracker_payment(
     amount_ok = False
 
     for value in amounts:
-
         try:
             parsed = Decimal(str(value))
-
         except (
             InvalidOperation,
             ValueError,
@@ -399,9 +433,17 @@ def verify_tracker_payment(
     )
 
     ok = (
-        state == "TRACKER_ENDED"
+        state in {
+            "TRACKER_ENDED",
+            "PAID",
+            "COMPLETE",
+            "COMPLETED",
+            "CAPTURED",
+            "SUCCESS",
+            "SUCCEEDED",
+        }
         and has_charge
-        and "CAPTURE" in events
+        and has_capture
         and amount_ok
         and currency_ok
     )
@@ -409,7 +451,10 @@ def verify_tracker_payment(
     return ok, {
         "state": state,
         "has_charge": has_charge,
+        "charge_id": charge_id,
+        "reference": reference,
         "events": sorted(events),
         "amount_ok": amount_ok,
         "currency_ok": currency_ok,
     }
+

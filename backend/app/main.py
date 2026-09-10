@@ -2763,6 +2763,14 @@ def traveler_booking_detail(
     booking = session.get(Booking, booking_id)
     if not booking or booking.tourist_user_id != user.id:
         raise HTTPException(404, "Booking not found")
+
+    try:
+        from .payments import get_booking_payment
+        get_booking_payment(booking_id, user, session)
+        session.refresh(booking)
+    except Exception:
+        pass
+
     return traveler_booking_row(booking, session)
 
 
