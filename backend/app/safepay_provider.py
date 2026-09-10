@@ -87,10 +87,13 @@ def create_tracker(
 
     client = safepay_sdk()
 
+    # Safepay API expects standard major currency units (e.g. 99.68), not minor cents (9968).
+    amount_major = round(float(amount_minor) / 100.0, 2)
+
     try:
         response = client.set_payment_details(
             {
-                "amount": int(amount_minor),
+                "amount": amount_major,
                 "currency": currency.upper(),
             }
         )
