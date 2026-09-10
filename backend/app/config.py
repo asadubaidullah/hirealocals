@@ -1,6 +1,22 @@
 from __future__ import annotations
 
+import os
+from typing import Any
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Staging isolation guard:
+# When executing within a staging worktree/directory, prevent ambient/leaked production
+# environment variables (e.g. from CloudLinux virtualenv wrappers or shared cPanel configs)
+# from overriding staging-specific configurations.
+_current_file_dir = os.path.dirname(os.path.abspath(__file__))
+_backend_dir = os.path.abspath(os.path.join(_current_file_dir, ".."))
+_is_staging = "staging" in _backend_dir.lower()
+
+if _is_staging:
+    _prod_db = "/home/awmnmeeypf/hirealocals-backend/hirealocals.db"
+    _env_db = os.environ.get("DATABASE_URL", "")
+    if _prod_db in _env_db or "hirealocals-backend" in _env_db:
+        os.environ.pop("DATABASE_URL", None)
 
 
 class Settings(BaseSettings):
@@ -80,6 +96,15 @@ class Settings(BaseSettings):
         env_file=("../.env", ".env"),
         extra="ignore",
     )
+
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        _backend_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+        if "staging" in _backend_dir.lower():
+            _prod_db = "/home/awmnmeeypf/hirealocals-backend/hirealocals.db"
+            if _prod_db in self.database_url or "hirealocals-backend" in self.database_url or self.database_url == "sqlite:///./hirealocals.db":
+                staging_db = os.path.abspath(os.path.join(_backend_dir, "hirealocals-staging.db"))
+                self.database_url = f"sqlite:///{staging_db}"
 
     @property
     def cors_list(self) -> list[str]:

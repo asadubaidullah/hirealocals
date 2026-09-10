@@ -4,7 +4,12 @@ import os
 import sys
 
 
-sys.path.insert(0, os.path.dirname(__file__))
+_backend_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _backend_dir)
+
+if "staging" in _backend_dir.lower():
+    _staging_db = os.path.abspath(os.path.join(_backend_dir, "hirealocals-staging.db"))
+    os.environ["DATABASE_URL"] = f"sqlite:///{_staging_db}"
 
 def load_source(modname, filename):
     loader = importlib.machinery.SourceFileLoader(modname, filename)
