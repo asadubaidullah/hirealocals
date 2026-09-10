@@ -2766,8 +2766,8 @@ def traveler_booking_detail(
         raise HTTPException(404, "Booking not found")
 
     try:
-        from .payments import get_booking_payment
-        get_booking_payment(booking_id, user, session)
+        from .payments import booking_payment_status
+        booking_payment_status(booking_id, user, session)
         session.refresh(booking)
     except Exception:
         pass
@@ -2815,9 +2815,9 @@ def traveler_booking_receipt(
         else:
             raise HTTPException(403, "Access denied")
 
-    from .payments import payment_record, get_booking_payment
+    from .payments import payment_record, booking_payment_status
     try:
-        get_booking_payment(booking_id, user, session)
+        booking_payment_status(booking_id, user, session)
         session.refresh(booking)
     except Exception:
         pass
