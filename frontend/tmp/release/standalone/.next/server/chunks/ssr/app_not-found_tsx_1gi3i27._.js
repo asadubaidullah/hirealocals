@@ -1,0 +1,3 @@
+module.exports=[66188,a=>{"use strict";var b=a.i(7997),c=a.i(95936);a.s(["default",0,function(){return(0,b.jsx)("section",{className:"section",children:(0,b.jsxs)("div",{className:"container",style:{textAlign:"center",maxWidth:650},children:[(0,b.jsx)("span",{className:"eyebrow",children:"404"}),(0,b.jsx)("h1",{style:{fontSize:64},children:"That page wandered off."}),(0,b.jsx)("p",{className:"lead",children:"The city, local or page you requested does not exist."}),(0,b.jsx)(c.default,{className:"btn",href:"/",children:"Back home"})]})})}])},2894,function(a){a.n(a.i(66188))}];
+
+//# sourceMappingURL=app_not-found_tsx_1gi3i27._.js.map

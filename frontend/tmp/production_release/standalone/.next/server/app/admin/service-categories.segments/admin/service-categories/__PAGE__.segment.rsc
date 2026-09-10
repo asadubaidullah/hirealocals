@@ -1,0 +1,25 @@
+1:"$Sreact.fragment"
+2:I[47257,["/_next/static/chunks/3fntmmi971322.js"],"ClientPageRoot"]
+3:I[49395,["/_next/static/chunks/2fbi-r0sd_di9.js","/_next/static/chunks/1ygncjtrq-85p.js"],"default"]
+6:I[97367,["/_next/static/chunks/3fntmmi971322.js"],"OutletBoundary"]
+7:"$Sreact.suspense"
+b:I[97367,["/_next/static/chunks/3fntmmi971322.js"],"ViewportBoundary"]
+c:I[97367,["/_next/static/chunks/3fntmmi971322.js"],"MetadataBoundary"]
+d:I[27201,["/_next/static/chunks/3fntmmi971322.js"],"IconMark"]
+f:I[39756,["/_next/static/chunks/3fntmmi971322.js"],"default"]
+10:I[37457,["/_next/static/chunks/3fntmmi971322.js"],"default"]
+a:X
+12:X
+12:C
+0:{"buildId":"4ht26qLX6xJ-Xq_s5jvs4","data":[{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"Component":"$3","serverProvidedParams":{"searchParams":{},"params":{},"promises":["$@4","$@5"]}}],[["$","script","script-0",{"src":"/_next/static/chunks/1ygncjtrq-85p.js","async":true}]],["$","$L6",null,{"children":["$","$7",null,{"name":"Next.MetadataOutlet","children":"$@8"}]}]]}],"isPartial":"$@9","staleTime":"$a","varyParams":null},{"rsc":["$","$1","h",{"children":[null,["$","$Lb",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]}],["$","div",null,{"hidden":true,"children":["$","$Lc",null,{"children":["$","$7",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"HireALocals | Hire Trusted Locals for Better Trips"}],["$","meta","1",{"name":"description","content":"Find trusted locals for private tours, photography, food discoveries, orientation and practical trip help in selected UK and US cities."}],["$","meta","2",{"name":"application-name","content":"HireALocals"}],["$","link","3",{"rel":"author","href":"https://hirealocals.com"}],["$","meta","4",{"name":"author","content":"HireALocals"}],["$","link","5",{"rel":"manifest","href":"/manifest.webmanifest"}],["$","meta","6",{"name":"creator","content":"HireALocals"}],["$","meta","7",{"name":"publisher","content":"HireALocals"}],["$","meta","8",{"name":"robots","content":"index, follow"}],["$","meta","9",{"name":"googlebot","content":"index, follow, max-video-preview:-1, max-image-preview:large, max-snippet:-1"}],["$","meta","10",{"name":"category","content":"travel"}],["$","link","11",{"rel":"canonical","href":"https://hirealocals.com"}],["$","meta","12",{"name":"format-detection","content":"telephone=no, address=no, email=no"}],["$","meta","13",{"property":"og:title","content":"HireALocals | Hire Trusted Locals for Better Trips"}],["$","meta","14",{"property":"og:description","content":"Travel less like a tourist. Discover a city with someone who lives there."}],["$","meta","15",{"property":"og:url","content":"https://hirealocals.com"}],["$","meta","16",{"property":"og:site_name","content":"HireALocals"}],["$","meta","17",{"property":"og:locale","content":"en_GB"}],["$","meta","18",{"property":"og:image","content":"https://hirealocals.com/opengraph-image"}],["$","meta","19",{"property":"og:image:width","content":"1200"}],["$","meta","20",{"property":"og:image:height","content":"630"}],["$","meta","21",{"property":"og:image:alt","content":"HireALocals travel with trusted locals"}],["$","meta","22",{"property":"og:type","content":"website"}],["$","meta","23",{"name":"twitter:card","content":"summary_large_image"}],["$","meta","24",{"name":"twitter:title","content":"HireALocals"}],["$","meta","25",{"name":"twitter:description","content":"Find trusted locals for private, flexible travel experiences."}],["$","meta","26",{"name":"twitter:image","content":"https://hirealocals.com/opengraph-image"}],["$","link","27",{"rel":"icon","href":"/icon.svg?icon.25-w1gaswi9ad.svg","sizes":"any","type":"image/svg+xml"}],["$","$Ld","28",{}]]}]}]}],null]}],"isPartial":"$@e","staleTime":"$a","varyParams":null},{"rsc":["$","$1","c",{"children":[null,["$","$Lf",null,{"parallelRouterKey":"children","template":["$","$L10",null,{}]}]]}],"isPartial":"$@11","staleTime":"$a","varyParams":"$12"},{"rsc":["$","$1","c",{"children":[null,["$","$Lf",null,{"parallelRouterKey":"children","template":["$","$L10",null,{}]}]]}],"isPartial":"$@13","staleTime":"$a","varyParams":null}],"isUpgradeableISRFallback":false,"a":"$@14","rootVaryParams":null,"needsRuntimeRequest":"$@15"}
+4:{}
+5:"$0:data:0:rsc:props:children:0:props:serverProvidedParams:params"
+8:null
+15:true
+a:300
+a:C
+14:0
+e:"$undefined"
+11:"$undefined"
+13:"$undefined"
+9:"$undefined"

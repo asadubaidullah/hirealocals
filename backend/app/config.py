@@ -17,6 +17,8 @@ if _is_staging:
     _env_db = os.environ.get("DATABASE_URL", "")
     if _prod_db in _env_db or "hirealocals-backend" in _env_db:
         os.environ.pop("DATABASE_URL", None)
+    for _var in ("TRUSTED_HOSTS", "FRONTEND_URL", "APP_ENV", "CORS_ORIGINS", "SAFEPAY_WEBHOOK_URL"):
+        os.environ.pop(_var, None)
 
 
 class Settings(BaseSettings):
@@ -105,6 +107,8 @@ class Settings(BaseSettings):
             if _prod_db in self.database_url or "hirealocals-backend" in self.database_url or self.database_url == "sqlite:///./hirealocals.db":
                 staging_db = os.path.abspath(os.path.join(_backend_dir, "hirealocals-staging.db"))
                 self.database_url = f"sqlite:///{staging_db}"
+            if "*" not in self.trusted_hosts_list:
+                self.trusted_hosts += ",*,127.0.0.1,localhost"
 
     @property
     def cors_list(self) -> list[str]:
