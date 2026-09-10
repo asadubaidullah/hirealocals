@@ -1,4 +1,4 @@
-﻿const configuredSiteUrl =
+const configuredSiteUrl =
   process.env.NEXT_PUBLIC_SITE_URL?.trim();
 
 const configuredPublicApiUrl =
@@ -27,10 +27,16 @@ const publicApiUrl = (
  * During local development browser requests use
  * Next.js same-origin /hal-api proxy to avoid changing
  * the production API CORS policy.
+ *
+ * In browser context, if accessed via a tunnel (e.g. trycloudflare) or preview/local host,
+ * use same-origin relative requests so client calls route to the active staging router.
  */
 export const apiUrl =
   process.env.NODE_ENV === "development"
     ? "/hal-api"
+    : typeof window !== "undefined" &&
+      !window.location.hostname.endsWith("hirealocals.com")
+    ? ""
     : publicApiUrl;
 
 /*

@@ -48,6 +48,11 @@ const nextConfig: NextConfig = {
   compress: true,
   output: "standalone",
 
+  experimental: {
+    cpus: 1,
+    workerThreads: false,
+  },
+
   images: {
     formats: ["image/avif", "image/webp"],
     minimumCacheTTL: 86400,
