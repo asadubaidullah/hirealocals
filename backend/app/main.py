@@ -2828,9 +2828,9 @@ def traveler_booking_receipt(
 ):
     """Download official payment receipt PDF for paid bookings."""
     auth_token = None
-    if authorization and authorization.lower().startswith("bearer "):
+    if isinstance(authorization, str) and authorization.lower().startswith("bearer "):
         auth_token = authorization[7:].strip()
-    elif token:
+    elif isinstance(token, str) and token.strip():
         auth_token = token.strip()
 
     if not auth_token:

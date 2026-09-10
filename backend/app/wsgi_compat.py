@@ -20,12 +20,12 @@ import types
 import uuid
 from datetime import date, datetime, time
 from pathlib import Path
-from typing import Annotated, Any, Union, get_args, get_origin
+from typing import Annotated, Any, Union, get_args, get_origin, get_type_hints
 from urllib.parse import parse_qs
 
 from fastapi import HTTPException, UploadFile
 from fastapi.encoders import jsonable_encoder
-from fastapi.params import Depends as DependsParam, File as FileParam
+from fastapi.params import Depends as DependsParam, File as FileParam, Header as HeaderParam, Query as QueryParam
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, TypeAdapter, ValidationError
 from sqlmodel import Session
@@ -64,15 +64,22 @@ def _base_annotation(annotation: Any) -> Any:
     return annotation
 
 
-def _dependency(param: inspect.Parameter):
+def _dependency(param: inspect.Parameter, annotation: Any = None):
     default = param.default
     if isinstance(default, DependsParam):
         return default.dependency
-    annotation = param.annotation
-    if get_origin(annotation) is Annotated:
-        for item in get_args(annotation)[1:]:
+    ann = annotation if annotation is not None else param.annotation
+    if get_origin(ann) is Annotated:
+        for item in get_args(ann)[1:]:
             if isinstance(item, DependsParam):
                 return item.dependency
+    if isinstance(ann, str):
+        if "current_user" in ann:
+            return current_user
+        if "admin_user" in ann:
+            return admin_user
+        if "get_session" in ann:
+            return get_session
     return None
 
 
@@ -361,6 +368,18 @@ def _serve_public_upload(path: str, start_response, request: Request):
     return _plain_wsgi_response(start_response, request, 200, body, content_type)
 
 
+def _extract_api_routes(routes: list[Any]) -> list[APIRoute]:
+    out: list[APIRoute] = []
+    for r in routes:
+        if isinstance(r, APIRoute):
+            out.append(r)
+        elif hasattr(r, "original_router") and hasattr(r.original_router, "routes"):
+            out.extend(_extract_api_routes(r.original_router.routes))
+        elif hasattr(r, "routes"):
+            out.extend(_extract_api_routes(r.routes))
+    return out
+
+
 class HireALocalsWSGI:
     def __init__(self):
         # Import route definitions only after the WSGI process has its cPanel
@@ -378,7 +397,7 @@ class HireALocalsWSGI:
         PRIVATE_UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 
         self.fastapi_app = fastapi_app
-        self.routes = [route for route in fastapi_app.routes if isinstance(route, APIRoute)]
+        self.routes = _extract_api_routes(fastapi_app.routes)
 
     def _build_kwargs(
         self,
@@ -390,13 +409,18 @@ class HireALocalsWSGI:
         session: Session,
     ) -> tuple[dict[str, Any], Any | None]:
         signature = inspect.signature(endpoint)
+        try:
+            type_hints = get_type_hints(endpoint, include_extras=True)
+        except Exception:
+            type_hints = {}
         query = parse_qs(request.url.query, keep_blank_values=True)
         payload_cache: Any = None
         form_cache = None
         kwargs: dict[str, Any] = {}
 
         for name, param in signature.parameters.items():
-            dependency = _dependency(param)
+            param_annotation = type_hints.get(name, param.annotation)
+            dependency = _dependency(param, annotation=param_annotation)
             if dependency is get_session:
                 kwargs[name] = session
                 continue
@@ -408,7 +432,7 @@ class HireALocalsWSGI:
                 kwargs[name] = admin_user(user)
                 continue
 
-            annotation = _base_annotation(param.annotation)
+            annotation = _base_annotation(param_annotation)
             if annotation is Request or name == "request":
                 kwargs[name] = request
                 continue
@@ -440,7 +464,21 @@ class HireALocalsWSGI:
                     raise HTTPException(422, f"Invalid query parameter: {name}") from exc
                 continue
 
-            if param.default is not inspect._empty and not isinstance(param.default, (DependsParam, FileParam)):
+            if isinstance(param.default, HeaderParam):
+                hdr_name = (param.default.alias or name.replace("_", "-")).lower()
+                hdr_val = request.headers.get(hdr_name)
+                kwargs[name] = hdr_val if hdr_val is not None else param.default.default
+                continue
+
+            if isinstance(param.default, QueryParam):
+                q_name = param.default.alias or name
+                if q_name in query:
+                    kwargs[name] = _coerce_scalar(query[q_name][-1], annotation)
+                else:
+                    kwargs[name] = param.default.default
+                continue
+
+            if param.default is not inspect._empty and not isinstance(param.default, (DependsParam, FileParam, HeaderParam, QueryParam)):
                 kwargs[name] = param.default
                 continue
 
