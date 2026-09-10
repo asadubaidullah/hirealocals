@@ -10,8 +10,9 @@ import smtplib
 from email.message import EmailMessage
 import io
 import csv
+import jwt
 
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Request, Response
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Request, Response, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -2772,6 +2773,125 @@ def traveler_booking_detail(
         pass
 
     return traveler_booking_row(booking, session)
+
+
+@app.get("/api/traveler/bookings/{booking_id}/receipt")
+def traveler_booking_receipt(
+    booking_id: int,
+    session: Annotated[Session, Depends(get_session)],
+    token: Optional[str] = Query(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    """Download official payment receipt PDF for paid bookings."""
+    auth_token = None
+    if authorization and authorization.lower().startswith("bearer "):
+        auth_token = authorization[7:].strip()
+    elif token:
+        auth_token = token.strip()
+
+    if not auth_token:
+        raise HTTPException(401, "Authentication required to download receipt")
+
+    try:
+        payload = jwt.decode(auth_token, settings.jwt_secret, algorithms=["HS256"])
+        user_id = int(payload.get("sub", "0"))
+    except Exception:
+        raise HTTPException(401, "Invalid or expired authentication token")
+
+    user = session.get(User, user_id)
+    if not user or not user.is_active:
+        raise HTTPException(401, "User not found or inactive")
+
+    booking = session.get(Booking, booking_id)
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+
+    # Access control: traveler who created it, admin, or host local
+    if user.role != "admin" and booking.tourist_user_id != user.id:
+        if user.role == "local":
+            profile = session.exec(select(LocalProfile).where(LocalProfile.user_id == user.id)).first()
+            if not profile or profile.id != booking.local_profile_id:
+                raise HTTPException(403, "Access denied")
+        else:
+            raise HTTPException(403, "Access denied")
+
+    from .payments import payment_record, get_booking_payment
+    try:
+        get_booking_payment(booking_id, user, session)
+        session.refresh(booking)
+    except Exception:
+        pass
+
+    payment = payment_record(session, booking.id)
+    if not payment or payment.status != "paid":
+        raise HTTPException(400, "Receipt is only available for paid bookings")
+
+    traveler = session.get(User, booking.tourist_user_id)
+    local = session.get(LocalProfile, booking.local_profile_id)
+    service = session.get(Service, booking.service_id) if booking.service_id else None
+    meeting = meeting_point_dict(session, booking.id)
+
+    meeting_summary = ""
+    if meeting and (meeting.get("meeting_point_name") or meeting.get("meeting_address")):
+        parts = [meeting.get("meeting_point_name", ""), meeting.get("meeting_address", "")]
+        meeting_summary = " · ".join(p for p in parts if p)
+
+    paid_dt = payment.paid_at or booking.created_at
+    if isinstance(paid_dt, str):
+        try:
+            paid_dt = datetime.fromisoformat(paid_dt.replace("Z", "+00:00"))
+        except Exception:
+            paid_dt = datetime.now(timezone.utc)
+    paid_at_formatted = paid_dt.strftime("%d %b %Y, %H:%M UTC")
+
+    subtotal = float(booking.subtotal)
+    platform_fee = float(booking.platform_fee)
+    discount = float(getattr(booking, "discount_amount", 0.0) or 0.0)
+    promo_code = getattr(booking, "promo_code", "") or ""
+    total = (
+        round(payment.amount_total_minor / 100.0, 2)
+        if payment.amount_total_minor
+        else round(subtotal + platform_fee - discount, 2)
+    )
+
+    receipt_data = {
+        "id": booking.id,
+        "receipt_number": f"HAL-REC-{booking.id:05d}",
+        "paid_at_formatted": paid_at_formatted,
+        "currency": (payment.currency or "USD").upper(),
+        "traveler_name": traveler.full_name if traveler else "Traveler",
+        "traveler_email": traveler.email if traveler else "",
+        "local_name": local.display_name if local else "Local Host",
+        "local_city": local.city_name if local else "London",
+        "local_country": "United Kingdom" if (local and getattr(local, "country_code", "GB") == "GB") else "United States",
+        "service_title": service.title if service else "Flexible Local Experience",
+        "booking_date": booking.booking_date,
+        "start_time": booking.start_time,
+        "end_time": booking_end_time(booking),
+        "hours": booking.hours,
+        "guests": booking.guests,
+        "subtotal": subtotal,
+        "platform_fee": platform_fee,
+        "discount_amount": discount,
+        "promo_code": promo_code,
+        "total": total,
+        "safepay_tracker": payment.checkout_session_id or "",
+        "safepay_reference": payment.payment_intent_id or "",
+        "charge_id": getattr(payment, "charge_id", "") or "",
+        "meeting_point_summary": meeting_summary,
+    }
+
+    from .receipt_pdf import generate_booking_receipt_pdf
+    pdf_bytes = generate_booking_receipt_pdf(receipt_data)
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="hirealocals-receipt-booking-{booking.id}.pdf"',
+            "Cache-Control": "private, no-cache",
+        },
+    )
 
 
 @app.patch("/api/traveler/bookings/{booking_id}/cancel")
