@@ -298,6 +298,26 @@ class SupportReply(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+class SupportCase(SQLModel, table=True):
+    """Production support case model for chatbot and human escalation."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    reference: str = Field(unique=True, index=True, max_length=40)
+    name: str = Field(max_length=120)
+    email: str = Field(index=True, max_length=255)
+    booking_reference: Optional[str] = Field(default=None, index=True, max_length=50)
+    category: str = Field(default="general", index=True, max_length=50)
+    subject: str = Field(default="Support Case", max_length=200)
+    description: str = Field(max_length=5000)
+    conversation_summary: Optional[str] = Field(default=None, max_length=10000)
+    retell_chat_id: Optional[str] = Field(default=None, index=True, max_length=100)
+    status: str = Field(default="open", index=True, max_length=30)
+    assigned_name: Optional[str] = Field(default=None, max_length=120)
+    assigned_avatar: Optional[str] = Field(default=None, max_length=500)
+    assigned_role: Optional[str] = Field(default="HireALocals Support", max_length=120)
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
 class SeoCity(SQLModel, table=True):
     """DB-driven public destination/SEO landing page."""
     id: Optional[int] = Field(default=None, primary_key=True)

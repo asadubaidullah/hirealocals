@@ -1,196 +1,179 @@
 import Link from "next/link";
 import {
-  Facebook,
-  Instagram,
-  Linkedin,
+  Compass,
+  Headphones,
+  HeartHandshake,
   Mail,
-  MessageCircle,
+  MessageSquare,
   Phone,
-  Send,
   ShieldCheck,
-  Youtube
+  Sparkles,
 } from "lucide-react";
 import { getSiteContent } from "@/lib/content";
+import FooterNavAccordions from "./FooterNavAccordions";
+import SocialLinks from "@/components/SocialLinks";
 
 function phoneHref(value: string) {
   return `tel:${value.replace(/[^+\d]/g, "")}`;
 }
 
-function whatsappHref(value: string) {
-  const digits = value.replace(/\D/g, "");
-  return digits ? `https://wa.me/${digits}` : "";
+function WhatsAppIcon({ size = 16, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2zm.01 1.67c2.2 0 4.26.86 5.82 2.42a8.225 8.225 0 0 1 2.41 5.83c0 4.54-3.7 8.24-8.24 8.24-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.189 8.189 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24zm4.52 11.64c-.25-.13-1.47-.72-1.7-.81-.23-.08-.39-.13-.56.13-.17.25-.64.81-.79.97-.14.17-.29.19-.54.06-.25-.13-1.06-.39-2.03-1.25-.75-.67-1.26-1.5-1.41-1.75-.14-.25-.02-.39.11-.51.11-.11.25-.29.37-.44.13-.14.17-.25.25-.42.08-.17.04-.31-.02-.44-.06-.13-.56-1.35-.77-1.85-.2-.49-.41-.42-.56-.43h-.48c-.17 0-.44.06-.67.31-.23.25-.88.86-.88 2.1 0 1.24.9 2.44 1.03 2.61.13.17 1.77 2.7 4.29 3.79.6.26 1.07.41 1.44.53.6.19 1.15.16 1.58.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.15-1.18-.06-.11-.22-.17-.47-.3z" />
+    </svg>
+  );
 }
 
 export default async function Footer() {
   const content = await getSiteContent();
 
   const email = content.support_email?.trim() || "support@hirealocals.com";
-  const phone =
-    content.support_phone?.trim() ||
-    process.env.NEXT_PUBLIC_SUPPORT_PHONE?.trim() ||
-    "";
-
-  const whatsapp =
-    content.whatsapp_number?.trim() ||
-    phone ||
-    "";
-
-  const whatsappUrl = whatsapp ? whatsappHref(whatsapp) : "";
+  const phone = "+1 (305) 770-6921";
+  const phoneDisplay = "+1 305 770 6921";
+  const callHref = phoneHref(phone);
+  const whatsappUrl = "https://wa.me/13057706921";
 
   return (
     <footer className="footer hal-footer" role="contentinfo">
       <div className="container">
         <div className="hal-footer-grid">
-          {/* Brand Column */}
+          {/* 1. LEFT BRAND AREA */}
           <div className="hal-footer-brand">
-            <Link href="/" className="logo" aria-label="HireALocals Home">
+            <Link href="/" className="logo hal-footer-logo" aria-label="HireALocals Home">
               HireA<span>Locals</span>
             </Link>
-            <p>
+
+            <div className="hal-footer-tagline">
+              PEOPLE. PLACES. REAL EXPERIENCES.
+            </div>
+
+            <p className="hal-footer-desc">
               Connect with verified local residents for private walking experiences, authentic food discoveries, and practical travel orientation.
             </p>
-            <div className="hal-footer-trust-micro">
-              <ShieldCheck size={16} />
+
+            <div className="hal-footer-trust-pill">
+              <ShieldCheck size={16} className="hal-trust-icon" />
               <span>Verified Hosts &amp; Secure Payments</span>
             </div>
+
+            {/* 3 Benefit Icons/Labels */}
+            <div className="hal-footer-benefits">
+              <div className="hal-benefit-item">
+                <div className="hal-benefit-icon-wrap">
+                  <Sparkles size={14} />
+                </div>
+                <span>Authentic Experiences</span>
+              </div>
+              <div className="hal-benefit-item">
+                <div className="hal-benefit-icon-wrap">
+                  <HeartHandshake size={14} />
+                </div>
+                <span>Support Local Communities</span>
+              </div>
+              <div className="hal-benefit-item">
+                <div className="hal-benefit-icon-wrap">
+                  <Compass size={14} />
+                </div>
+                <span>Travel Better Together</span>
+              </div>
+            </div>
           </div>
 
-          {/* Nav Column 1: Explore */}
-          <div className="hal-footer-col">
-            <strong>Explore</strong>
-            <nav className="hal-footer-nav" aria-label="Footer Explore Navigation">
-              <Link href="/explore">Find a Local</Link>
-              <Link href="/destinations">Destinations</Link>
-              <Link href="/experiences">Experiences</Link>
-              <Link href="/blog">Travel Guides</Link>
-              <Link href="/request-a-local">Request a Local</Link>
-            </nav>
-          </div>
+          {/* 2. CENTER NAVIGATION (3 Columns Desktop / Accordions Mobile) */}
+          <FooterNavAccordions />
 
-          {/* Nav Column 2: Company */}
-          <div className="hal-footer-col">
-            <strong>Company</strong>
-            <nav className="hal-footer-nav" aria-label="Footer Company Navigation">
-              <Link href="/about">About</Link>
-              <Link href="/how-it-works">How it works</Link>
-              <Link href="/safety">Trust & Safety</Link>
-              <Link href="/contact">Contact & Support</Link>
-            </nav>
-          </div>
+          {/* 3. RIGHT SUPPORT CARD */}
+          <div className="hal-footer-support-card">
+            {/* Card Top */}
+            <div className="hal-support-head">
+              <div className="hal-support-headset-circle">
+                <Headphones size={18} />
+              </div>
+              <div className="hal-support-head-text">
+                <h3 className="hal-support-title">Need help?</h3>
+                <span className="hal-support-subtitle">We&apos;re here for you.</span>
+              </div>
+            </div>
 
-          {/* Nav Column 3: For Locals & Legal */}
-          <div className="hal-footer-col">
-            <strong>For Locals & Legal</strong>
-            <nav className="hal-footer-nav" aria-label="Footer Local & Legal Navigation">
-              <Link href="/become-a-local">Become a Local</Link>
-              <Link href="/local-dashboard">Local Dashboard</Link>
-              <Link href="/terms">Terms of Service</Link>
-              <Link href="/privacy">Privacy Policy</Link>
-              <Link href="/cancellation">Cancellation Policy</Link>
-              <Link href="/refund">Refund Policy</Link>
-            </nav>
-          </div>
-
-          {/* Column 4: Dedicated Contact & Actions Card */}
-          <div className="hal-footer-support">
-            <strong>{content.footer_help_title || "Contact & Support"}</strong>
-
-            <div className="hal-support-info">
+            {/* Two Full-Width Compact Rows */}
+            <div className="hal-support-rows">
               <a
                 href={`mailto:${email}`}
-                className="hal-support-email-link"
-                aria-label={`Email support at ${email}`}
+                className="hal-support-row"
+                aria-label={`Send us an email at ${email}`}
               >
-                <Mail size={15} />
-                <span>{email}</span>
+                <div className="hal-support-row-icon">
+                  <Mail size={15} />
+                </div>
+                <div className="hal-support-row-content">
+                  <span className="hal-support-row-primary">{email}</span>
+                  <span className="hal-support-row-secondary">Send us an email</span>
+                </div>
               </a>
 
-              {phone ? (
-                <span className="hal-support-phone-text">
-                  <Phone size={14} />
-                  <span>{phone}</span>
-                </span>
-              ) : null}
-            </div>
-
-            <div className="hal-support-actions-grid">
               <Link
                 href="/contact"
-                className="hal-support-btn hal-support-btn-primary"
-                aria-label="Send a message to HireALocals support"
+                className="hal-support-row"
+                aria-label="Message us online"
               >
-                <Send size={15} />
-                <span>Message us</span>
+                <div className="hal-support-row-icon">
+                  <MessageSquare size={15} />
+                </div>
+                <div className="hal-support-row-content">
+                  <span className="hal-support-row-primary">Message us</span>
+                  <span className="hal-support-row-secondary">We&apos;re online to help</span>
+                </div>
               </Link>
-
-              {phone ? (
-                <a
-                  href={phoneHref(phone)}
-                  className="hal-support-btn hal-support-btn-secondary"
-                  aria-label={`Call HireALocals at ${phone}`}
-                >
-                  <Phone size={15} />
-                  <span>Call us</span>
-                </a>
-              ) : (
-                <a
-                  href={`mailto:${email}`}
-                  className="hal-support-btn hal-support-btn-secondary"
-                  aria-label={`Email support at ${email}`}
-                >
-                  <Mail size={15} />
-                  <span>Email us</span>
-                </a>
-              )}
-
-              {whatsappUrl ? (
-                <a
-                  href={whatsappUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hal-support-btn hal-support-btn-wa"
-                  aria-label="Chat with HireALocals on WhatsApp"
-                >
-                  <MessageCircle size={15} />
-                  <span>WhatsApp</span>
-                </a>
-              ) : null}
             </div>
+
+            {/* Bottom Two Equal CTA Buttons */}
+            <div className="hal-support-cta-grid">
+              <a
+                href={callHref}
+                className="hal-support-cta-btn hal-cta-call"
+                aria-label={`Call us at ${phoneDisplay}`}
+              >
+                <Phone size={15} className="hal-cta-icon" />
+                <div className="hal-cta-text">
+                  <span className="hal-cta-label">Call us</span>
+                  <span className="hal-cta-value">{phoneDisplay}</span>
+                </div>
+              </a>
+
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hal-support-cta-btn hal-cta-wa"
+                aria-label="Chat on WhatsApp"
+              >
+                <WhatsAppIcon size={16} className="hal-cta-icon" />
+                <div className="hal-cta-text">
+                  <span className="hal-cta-label">WhatsApp</span>
+                  <span className="hal-cta-value">Chat on WhatsApp</span>
+                </div>
+              </a>
+            </div>
+
+            {/* Official Social Links in Support Card */}
+            <SocialLinks content={content} variant="footer" iconSize={15} />
           </div>
         </div>
 
-        {/* Footer Bottom Bar */}
+        {/* 4. FOOTER BOTTOM ROW - COMPACT SINGLE STRIP */}
         <div className="hal-footer-bottom">
           <div className="hal-footer-copy">
             <span>&copy; {new Date().getFullYear()} HireALocals.com. All rights reserved.</span>
-            <span className="hal-footer-bullet">&bull;</span>
+            <span className="hal-footer-bullet" aria-hidden="true">&bull;</span>
             <span className="hal-footer-tag">Private Local Experiences</span>
-          </div>
-
-          <div className="hal-footer-socials" aria-label="Social media links">
-            {content.instagram_url ? (
-              <a href={content.instagram_url} target="_blank" rel="noopener noreferrer" aria-label="Instagram">
-                <Instagram size={17} />
-              </a>
-            ) : null}
-
-            {content.facebook_url ? (
-              <a href={content.facebook_url} target="_blank" rel="noopener noreferrer" aria-label="Facebook">
-                <Facebook size={17} />
-              </a>
-            ) : null}
-
-            {content.youtube_url ? (
-              <a href={content.youtube_url} target="_blank" rel="noopener noreferrer" aria-label="YouTube">
-                <Youtube size={17} />
-              </a>
-            ) : null}
-
-            {content.linkedin_url ? (
-              <a href={content.linkedin_url} target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
-                <Linkedin size={17} />
-              </a>
-            ) : null}
           </div>
         </div>
       </div>

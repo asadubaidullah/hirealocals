@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -10,9 +10,10 @@ type Props = {
   className?: string;
   exact?: boolean;
   matchPrefixes?: string[];
+  onClick?: () => void;
 };
 
-export default function ActiveNavLink({ href, children, className = "", exact = false, matchPrefixes = [] }: Props) {
+export default function ActiveNavLink({ href, children, className = "", exact = false, matchPrefixes = [], onClick }: Props) {
   const pathname = usePathname();
   const matchesHref = exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
   const matchesExtra = matchPrefixes.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`));
@@ -23,6 +24,7 @@ export default function ActiveNavLink({ href, children, className = "", exact = 
       href={href}
       className={`${className} ${active ? "is-active" : ""}`.trim()}
       aria-current={active ? "page" : undefined}
+      onClick={onClick}
     >
       {children}
     </Link>

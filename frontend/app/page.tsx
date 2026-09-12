@@ -124,8 +124,8 @@ export default async function Home(){
     <section className="hal-home-hero">
       <div className="container hal-home-hero-inner">
         <div className="hal-home-hero-copy">
-          <span className="eyebrow">Private Travel Marketplace</span>
-          <h1>
+          <span className="eyebrow hal-home-hero-eyebrow">Private Travel Marketplace</span>
+          <h1 className="hal-home-hero-desktop-heading">
             Real people.<br/>
             Real experiences.<br/>
             <span>Made for you.</span>
@@ -181,34 +181,15 @@ export default async function Home(){
               />
             </picture>
 
-            {first&&first.image ? (
-              <Link
-                href={`/locals/${first.slug}`}
-                className="hal-home-floating-local"
-              >
-                <img
-                  src={first.image}
-                  alt=""
-                  className="avatar"
-                  width={48}
-                  height={48}
-                />
-                <div className="floating-card-body">
-                  <div className="floating-card-header">
-                    <strong>{first.name}</strong>
-                    {first.verified && <span className="verified-badge">✓</span>}
-                  </div>
-                  <span className="floating-card-sub">
-                    <MapPin size={11}/> {first.city}
-                  </span>
-                  {Number(first.rate) > 0 && (
-                    <span className="floating-card-price">
-                      From <strong>${Number(first.rate).toFixed(0)}</strong> / hr
-                    </span>
-                  )}
-                </div>
-              </Link>
-            ) : null}
+            {/* MOBILE HERO TEXT OVERLAY */}
+            <div className="hal-hero-mobile-overlay">
+              <span className="hal-hero-mobile-eyebrow">Private Travel Marketplace</span>
+              <h1 className="hal-hero-mobile-heading">
+                Real people.<br/>
+                Real experiences.<br/>
+                <span>Made for you.</span>
+              </h1>
+            </div>
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { Bell, Menu, X } from "lucide-react";
@@ -30,6 +30,21 @@ export default function Header(){
   },[]);
 
   useEffect(()=>setMobileOpen(false),[pathname]);
+
+  useEffect(()=>{
+    if(mobileOpen){
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if(e.key === "Escape") setMobileOpen(false);
+      };
+      window.addEventListener("keydown", handleKeyDown);
+      return ()=>{
+        document.body.style.overflow = originalOverflow;
+        window.removeEventListener("keydown", handleKeyDown);
+      };
+    }
+  },[mobileOpen]);
 
   useEffect(()=>{
     if(!role){setUnread(0);return}
@@ -152,49 +167,110 @@ export default function Header(){
       </button>
     </div>
 
+    {/* MOBILE SIDE-DRAWER BACKDROP OVERLAY */}
     <div
+      className={`mobile-drawer-overlay ${mobileOpen ? "is-open" : ""}`}
+      onClick={()=>setMobileOpen(false)}
+      aria-hidden={!mobileOpen}
+    />
+
+    {/* MOBILE SIDE-DRAWER */}
+    <aside
       id="mobile-site-menu"
-      className="mobile-menu-shell"
-      hidden={!mobileOpen}
+      className={`mobile-drawer ${mobileOpen ? "is-open" : ""}`}
+      aria-label="Mobile navigation"
+      aria-hidden={!mobileOpen}
     >
-      <div className="container mobile-menu-panel">
+      <div className="mobile-drawer-header">
+        <Link href="/" className="logo drawer-logo" onClick={()=>setMobileOpen(false)}>
+          <span className="header-logo-word">
+            HireA<strong>Locals</strong>
+          </span>
+        </Link>
+        <div className="mobile-drawer-header-actions">
+          <ThemeToggle/>
+          <button
+            type="button"
+            className="mobile-drawer-close"
+            aria-label="Close menu"
+            onClick={()=>setMobileOpen(false)}
+          >
+            <X size={20}/>
+          </button>
+        </div>
+      </div>
 
-        
-
-        <nav className="mobile-menu-links">
-          <ActiveNavLink href="/" exact>Home</ActiveNavLink>
-          <ActiveNavLink href="/explore">Find a Local</ActiveNavLink>
-          <ActiveNavLink href="/destinations">Destinations</ActiveNavLink>
-          <ActiveNavLink href="/experiences">Experiences</ActiveNavLink>
-          <ActiveNavLink href="/how-it-works">How it works</ActiveNavLink>
-          <ActiveNavLink href="/blog">Travel Guides</ActiveNavLink>
-          <ActiveNavLink href="/safety">Trust & Safety</ActiveNavLink>
-          <ActiveNavLink href="/contact">Contact</ActiveNavLink>
-          <ActiveNavLink href="/become-a-local">Become a Local</ActiveNavLink>
+      <div className="mobile-drawer-body">
+        <nav className="mobile-drawer-nav" aria-label="Mobile main links">
+          <ActiveNavLink href="/" exact className="mobile-drawer-link" onClick={()=>setMobileOpen(false)}>
+            Home
+          </ActiveNavLink>
+          <ActiveNavLink href="/explore" className="mobile-drawer-link" onClick={()=>setMobileOpen(false)}>
+            Find a Local
+          </ActiveNavLink>
+          <ActiveNavLink href="/destinations" className="mobile-drawer-link" onClick={()=>setMobileOpen(false)}>
+            Destinations
+          </ActiveNavLink>
+          <ActiveNavLink href="/experiences" className="mobile-drawer-link" onClick={()=>setMobileOpen(false)}>
+            Experiences
+          </ActiveNavLink>
+          <ActiveNavLink href="/how-it-works" className="mobile-drawer-link" onClick={()=>setMobileOpen(false)}>
+            How it works
+          </ActiveNavLink>
+          <ActiveNavLink href="/blog" className="mobile-drawer-link" onClick={()=>setMobileOpen(false)}>
+            Travel Guides
+          </ActiveNavLink>
+          <ActiveNavLink href="/safety" className="mobile-drawer-link" onClick={()=>setMobileOpen(false)}>
+            Trust &amp; Safety
+          </ActiveNavLink>
+          <ActiveNavLink href="/contact" className="mobile-drawer-link" onClick={()=>setMobileOpen(false)}>
+            Contact &amp; Support
+          </ActiveNavLink>
+          <ActiveNavLink href="/become-a-local" className="mobile-drawer-link highlight" onClick={()=>setMobileOpen(false)}>
+            Become a Local
+          </ActiveNavLink>
         </nav>
 
-        <div className="mobile-menu-divider"/>
+        <div className="mobile-drawer-divider"/>
 
-        <div className="mobile-account-actions">
+        <div className="mobile-drawer-actions">
           {ready&&role ? <>
-            <Link href={dashboardFor(role)} className="btn secondary">
+            <Link
+              href={dashboardFor(role)}
+              className="btn secondary mobile-drawer-action-btn"
+              onClick={()=>setMobileOpen(false)}
+            >
               Dashboard
             </Link>
-            <button className="btn" onClick={logout}>
+            <button
+              className="btn mobile-drawer-action-btn"
+              onClick={logout}
+            >
               Log out
             </button>
           </> : <>
-            <Link href="/login" className="btn secondary">
+            <Link
+              href="/login"
+              className="btn secondary mobile-drawer-action-btn"
+              onClick={()=>setMobileOpen(false)}
+            >
               Log in
             </Link>
-            <Link href="/register" className="btn">
+            <Link
+              href="/register"
+              className="btn mobile-drawer-action-btn"
+              onClick={()=>setMobileOpen(false)}
+            >
               Sign up
             </Link>
           </>}
         </div>
 
+        <div className="mobile-drawer-footer">
+          <span>Private Travel Marketplace</span>
+        </div>
       </div>
-    </div>
+    </aside>
   </header>;
 }
 

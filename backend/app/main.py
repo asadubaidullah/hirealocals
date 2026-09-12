@@ -48,6 +48,7 @@ from .models import (
     EmailOutbox,
     SupportState,
     SupportReply,
+    SupportCase,
     SeoCity,
     BlogPost,
     ServiceCategory,
@@ -90,6 +91,8 @@ from .schemas import (
     VerifyEmailInput,
     SupportUpdateInput,
     SupportReplyInput,
+    SupportCaseCreate,
+    SupportCaseResponse,
     SeoCityInput,
     SeoCityUpdate,
     BlogPostInput,
@@ -5356,6 +5359,148 @@ def contact(payload: ContactInput, request: Request, session: Annotated[Session,
     return {"ok": True, "id": item.id, "reference": f"HAL-SUPPORT-{item.id}"}
 
 
+@app.post("/api/support/cases", response_model=SupportCaseResponse)
+def create_support_case(
+    payload: SupportCaseCreate,
+    request: Request,
+    session: Annotated[Session, Depends(get_session)],
+):
+    """Production support case creation endpoint with abuse protection, unique reference generation, and notifications."""
+    enforce_rate_limit(session, request, "support_case", 5, 600, payload.email)
+
+    # Generate unique human-readable reference HAL-XXXXXX (6 alphanumeric chars, excluding ambiguous I, O, 0, 1)
+    charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    ref = ""
+    for _ in range(10):
+        candidate = f"HAL-{''.join(secrets.choice(charset) for _ in range(6))}"
+        existing = session.exec(select(SupportCase).where(SupportCase.reference == candidate)).first()
+        if not existing:
+            ref = candidate
+            break
+    if not ref:
+        ref = f"HAL-{int(datetime.now(timezone.utc).timestamp())}"
+
+    case = SupportCase(
+        reference=ref,
+        name=payload.name.strip(),
+        email=payload.email.strip().lower(),
+        booking_reference=payload.booking_reference.strip() if payload.booking_reference else None,
+        category=payload.category or "general",
+        subject=payload.subject.strip() if payload.subject else "Support Case",
+        description=payload.description.strip(),
+        conversation_summary=payload.conversation_summary.strip() if payload.conversation_summary else None,
+        retell_chat_id=payload.retell_chat_id.strip() if payload.retell_chat_id else None,
+        status="open",
+    )
+    session.add(case)
+    session.commit()
+    session.refresh(case)
+
+    # Mirror into ContactMessage & SupportState so the existing /admin/support displays it seamlessly
+    contact_msg_id = None
+    try:
+        summary_block = f"\n\nConversation Summary:\n{case.conversation_summary}" if case.conversation_summary else ""
+        retell_block = f"\nRetell Chat ID: {case.retell_chat_id}" if case.retell_chat_id else ""
+        booking_block = f"\nBooking Reference: {case.booking_reference}" if case.booking_reference else ""
+        mirror_msg = ContactMessage(
+            name=case.name,
+            email=case.email,
+            subject=f"[{case.reference}] {case.subject}",
+            message=(
+                f"Support Case Reference: {case.reference}"
+                f"{booking_block}"
+                f"\nCategory: {case.category}"
+                f"{retell_block}"
+                f"\n\nIssue Description:\n{case.description}"
+                f"{summary_block}"
+            ),
+        )
+        session.add(mirror_msg)
+        session.commit()
+        session.refresh(mirror_msg)
+        contact_msg_id = mirror_msg.id
+
+        existing_state = session.exec(select(SupportState).where(SupportState.contact_message_id == mirror_msg.id)).first()
+        if existing_state:
+            existing_state.status = "open"
+            existing_state.admin_note = f"Created via chatbot escalation. Reference: {case.reference}"
+            session.add(existing_state)
+        else:
+            mirror_state = SupportState(
+                contact_message_id=mirror_msg.id,
+                status="open",
+                admin_note=f"Created via chatbot escalation. Reference: {case.reference}",
+            )
+            session.add(mirror_state)
+        session.commit()
+    except Exception as e:
+        print(f"[SupportCase] Could not mirror support case to ContactMessage: {e}")
+
+    # Notify administrators via in-app notification
+    try:
+        link = f"/admin/support?id={contact_msg_id}" if contact_msg_id else "/admin/support"
+        notify_admins(
+            session,
+            "support_message",
+            f"New Support Case [{case.reference}]",
+            f"{case.name}: {case.subject}",
+            link,
+        )
+    except Exception as e:
+        print(f"[SupportCase] Failed to notify admins of support case {case.reference}: {e}")
+
+    # Queue customer confirmation email
+    try:
+        booking_info = f"Booking Reference: {case.booking_reference}\n" if case.booking_reference else ""
+        queue_email(
+            session,
+            case.email,
+            f"Support Case Created [{case.reference}] - HireALocals",
+            (
+                f"Hello {case.name},\n\n"
+                f"Your support case has been created successfully. Our team can now review the details without you having to repeat the issue.\n\n"
+                f"Reference: {case.reference}\n"
+                f"Subject: {case.subject}\n"
+                f"{booking_info}"
+                f"\nWe will use this email address ({case.email}) for any follow-up regarding your case.\n\n"
+                f"Best regards,\n"
+                f"HireALocals Support Team"
+            ),
+        )
+    except Exception as e:
+        print(f"[SupportCase] Failed to queue customer confirmation email for {case.reference}: {e}")
+
+    return SupportCaseResponse(
+        success=True,
+        reference=case.reference,
+        status=case.status,
+        id=case.id,
+        assigned_name=getattr(case, "assigned_name", None),
+        assigned_avatar=getattr(case, "assigned_avatar", None),
+        assigned_role=getattr(case, "assigned_role", None) or "HireALocals Support",
+    )
+
+
+@app.get("/api/support/cases/{reference}", response_model=SupportCaseResponse)
+def get_support_case_status(
+    reference: str,
+    session: Annotated[Session, Depends(get_session)],
+):
+    case = session.exec(select(SupportCase).where(SupportCase.reference == reference.strip())).first()
+    if not case:
+        raise HTTPException(404, "Support case not found")
+    return SupportCaseResponse(
+        success=True,
+        reference=case.reference,
+        status=case.status,
+        id=case.id,
+        assigned_name=getattr(case, "assigned_name", None),
+        assigned_avatar=getattr(case, "assigned_avatar", None),
+        assigned_role=getattr(case, "assigned_role", None) or "HireALocals Support",
+    )
+
+
+
 # ------------------------- Notifications -------------------------
 
 @app.get("/api/notifications")
@@ -5761,6 +5906,13 @@ _HAL_SITE_CONTENT_DEFAULTS: dict[str, str] = {
     "youtube_url": "",
     "linkedin_url": "",
     "instagram_url": "",
+    "tiktok_url": "",
+    "reddit_url": "",
+    "pinterest_url": "",
+    "meta_pixel_id": "",
+    "tiktok_pixel_id": "",
+    "pinterest_tag_id": "",
+    "google_tag_id": "",
     "footer_help_title": "Need help?",
     "footer_social_title": "Follow HireALocals",
 }
@@ -5842,6 +5994,9 @@ def admin_site_content_update(
         "youtube_url",
         "linkedin_url",
         "instagram_url",
+        "tiktok_url",
+        "reddit_url",
+        "pinterest_url",
     ):
         value = data[key]
 
@@ -5851,6 +6006,22 @@ def admin_site_content_update(
             raise HTTPException(
                 400,
                 f"{key} must be a full http/https URL.",
+            )
+
+    # Validate tracking pixel formats to prevent injection
+    import re
+    pixel_pattern = re.compile(r"^[A-Za-z0-9_\-]{0,80}$")
+    for key in (
+        "meta_pixel_id",
+        "tiktok_pixel_id",
+        "pinterest_tag_id",
+        "google_tag_id",
+    ):
+        value = data[key]
+        if value and not pixel_pattern.match(value):
+            raise HTTPException(
+                400,
+                f"{key} contains invalid characters.",
             )
 
     for key, value in data.items():

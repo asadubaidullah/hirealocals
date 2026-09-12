@@ -96,6 +96,22 @@ class PDFCanvas:
         elif stroke:
             self.add("s")
 
+    def circle(self, cx: float, cy: float, r: float, fill: bool = True, stroke: bool = False, line_width: float = 1.0):
+        c = 0.5523 * r
+        if stroke:
+            self.add(f"{line_width:.2f} w")
+        self.add(f"{cx + r:.2f} {cy:.2f} m")
+        self.add(f"{cx + r:.2f} {cy + c:.2f} {cx + c:.2f} {cy + r:.2f} {cx:.2f} {cy + r:.2f} c")
+        self.add(f"{cx - c:.2f} {cy + r:.2f} {cx - r:.2f} {cy + c:.2f} {cx - r:.2f} {cy:.2f} c")
+        self.add(f"{cx - r:.2f} {cy - c:.2f} {cx - c:.2f} {cy - r:.2f} {cx:.2f} {cy - r:.2f} c")
+        self.add(f"{cx + c:.2f} {cy - r:.2f} {cx + r:.2f} {cy - c:.2f} {cx + r:.2f} {cy:.2f} c")
+        if fill and stroke:
+            self.add("B")
+        elif fill:
+            self.add("f")
+        elif stroke:
+            self.add("s")
+
     def line(self, x1: float, y1: float, x2: float, y2: float, line_width: float = 1.0):
         self.add(f"{line_width:.2f} w")
         self.add(f"{x1:.2f} {y1:.2f} m {x2:.2f} {y2:.2f} l s")
@@ -189,11 +205,19 @@ def generate_booking_receipt_pdf(data: Dict[str, Any]) -> bytes:
     width = right - left
 
     # Top brand header
-    # Teal badge with HAL initials
+    # Emerald rounded emblem with white location pin & inner monogram
     p.set_fill(0.082, 0.584, 0.424)  # #15956c emerald
     p.rounded_rect(left, 752, 38, 38, r=9, fill=True)
+    # White location pin
     p.set_fill(1.0, 1.0, 1.0)
-    p.draw_text_center(left + 19, 764, "HAL", font="F2", size=13, bold=True)
+    p.circle(left + 19, 774, 8.0, fill=True)
+    p.add(f"{left + 12.0:.2f} {773.0:.2f} m {left + 26.0:.2f} {773.0:.2f} l {left + 19.0:.2f} {760.0:.2f} l f")
+    # Emerald inner core
+    p.set_fill(0.082, 0.584, 0.424)
+    p.circle(left + 19, 774, 3.8, fill=True)
+    # White base dot
+    p.set_fill(1.0, 1.0, 1.0)
+    p.circle(left + 19, 756.5, 1.4, fill=True)
 
     # Wordmark: "HireA" + "Locals"
     p.set_fill(0.094, 0.145, 0.224)  # Dark Slate #0f172a
@@ -210,16 +234,16 @@ def generate_booking_receipt_pdf(data: Dict[str, Any]) -> bytes:
     p.set_fill(0.059, 0.090, 0.165)
     p.draw_text_right(right, 772, "PAYMENT RECEIPT", font="F2", size=18, bold=True)
 
-    # Status Badge: PAID
-    badge_w = 88.0
-    badge_h = 18.0
+    # Status Badge: PAID (Polished Pill)
+    badge_w = 94.0
+    badge_h = 20.0
     badge_x = right - badge_w
     badge_y = 746.0
     p.set_fill(0.925, 0.984, 0.949)  # #ecfdf5 light mint
-    p.set_stroke(0.204, 0.780, 0.525)  # #34d399 green border
-    p.rounded_rect(badge_x, badge_y, badge_w, badge_h, r=5, fill=True, stroke=True, line_width=0.75)
+    p.set_stroke(0.063, 0.725, 0.506)  # #10b981 emerald border
+    p.rounded_rect(badge_x, badge_y, badge_w, badge_h, r=10, fill=True, stroke=True, line_width=1.0)
     p.set_fill(0.024, 0.471, 0.341)  # #065f46 dark green text
-    p.draw_text_center(badge_x + (badge_w / 2.0), badge_y + 4.5, "STATUS: PAID", font="F2", size=8.5, bold=True)
+    p.draw_text_center(badge_x + (badge_w / 2.0), badge_y + 5.5, "STATUS: PAID", font="F2", size=8.5, bold=True)
 
     # Header divider
     p.set_stroke(0.886, 0.910, 0.941)
@@ -395,16 +419,16 @@ def generate_booking_receipt_pdf(data: Dict[str, Any]) -> bytes:
     y_totals -= 22
     total_amount = float(data.get("total", subtotal + platform_fee - discount))
 
-    tot_box_w = 210.0
-    tot_box_h = 30.0
+    tot_box_w = 240.0
+    tot_box_h = 32.0
     tot_box_x = right - tot_box_w
     p.set_fill(0.925, 0.984, 0.949)
-    p.set_stroke(0.655, 0.886, 0.761)
-    p.rounded_rect(tot_box_x, y_totals - 8, tot_box_w, tot_box_h, r=5, fill=True, stroke=True, line_width=1.0)
+    p.set_stroke(0.063, 0.725, 0.506)  # #10b981 emerald
+    p.rounded_rect(tot_box_x, y_totals - 8, tot_box_w, tot_box_h, r=6, fill=True, stroke=True, line_width=1.0)
 
     p.set_fill(0.024, 0.471, 0.341)
-    p.draw_text(tot_box_x + 10, y_totals + 3, "TOTAL PAID:", font="F2", size=10.5, bold=True)
-    p.draw_text_right(right - 12, y_totals + 2, f"${total_amount:.2f} {currency}", font="F2", size=12.5, bold=True)
+    p.draw_text(tot_box_x + 12, y_totals + 4, "TOTAL PAID:", font="F2", size=10.5, bold=True)
+    p.draw_text_right(right - 12, y_totals + 3, f"${total_amount:.2f} {currency}", font="F2", size=12.5, bold=True)
 
     # Payment & Reconciliation Details Box
     y_sec_box = y_totals - 116

@@ -68,6 +68,24 @@ class ContactInput(BaseModel):
     message: str
 
 
+class SupportCaseCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    email: EmailStr
+    booking_reference: Optional[str] = Field(default=None, max_length=50)
+    category: Optional[str] = Field(default="general", max_length=50)
+    subject: Optional[str] = Field(default="Support Case", max_length=200)
+    description: str = Field(min_length=5, max_length=5000)
+    conversation_summary: Optional[str] = Field(default=None, max_length=10000)
+    retell_chat_id: Optional[str] = Field(default=None, max_length=100)
+
+
+class SupportCaseResponse(BaseModel):
+    success: bool
+    reference: str
+    status: str
+    id: Optional[int] = None
+
+
 class StatusUpdate(BaseModel):
     status: str
 
