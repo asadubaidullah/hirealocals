@@ -1,4 +1,4 @@
-﻿import { serverApiUrl } from "@/lib/site";
+import { serverApiUrl } from "@/lib/site";
 
 import {
   cities as fallbackCities,
@@ -60,6 +60,9 @@ export type SiteContent = {
   youtube_url:string;
   linkedin_url:string;
   instagram_url:string;
+  tiktok_url?: string | null;
+  reddit_url?: string | null;
+  pinterest_url?: string | null;
   footer_help_title:string;
   footer_social_title:string;
 };
